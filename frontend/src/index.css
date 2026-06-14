@@ -1,6 +1,34 @@
 @import "tailwindcss";
 
 @theme {
+  --color-bg-primary: #F5F5F5;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-card: #FFFFFF;
+  --color-bg-card-2: #F0F0F0;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-light: rgba(0, 0, 0, 0.12);
+  --color-text: #1A1A2E;
+  --color-text-muted: #6B7280;
+  --color-text-light: #9CA3AF;
+  --color-accent: #D4952E;
+  --color-accent-bg: rgba(212, 149, 46, 0.1);
+  --color-accent-hover: #B8842A;
+  --color-green: #059669;
+  --color-green-bg: rgba(5, 150, 105, 0.1);
+  --color-red: #DC2626;
+  --color-red-bg: rgba(220, 38, 38, 0.1);
+  --color-yellow: #D97706;
+  --color-blue: #2563EB;
+  --color-blue-bg: rgba(37, 99, 235, 0.1);
+  --color-purple: #7C3AED;
+  --color-purple-bg: rgba(124, 58, 237, 0.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+}
+
+/* ── Dark theme overrides ─────────────────────────── */
+[data-theme="dark"] {
   --color-bg-primary: #0F1419;
   --color-bg-secondary: #1A1F2E;
   --color-bg-card: #1E2433;
@@ -22,9 +50,6 @@
   --color-blue-bg: rgba(59, 130, 246, 0.1);
   --color-purple: #A78BFA;
   --color-purple-bg: rgba(167, 139, 250, 0.1);
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-xs: 6px;
 }
 
 * {
@@ -116,7 +141,7 @@ body {
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-bg-card-2);
   color: var(--color-text);
 }
 
@@ -305,7 +330,7 @@ body {
 }
 
 .trade-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-bg-card-2);
 }
 
 /* ── Text colors ──────────────────────────────── */
