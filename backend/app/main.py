@@ -1,5 +1,5 @@
 # app/main.py
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -55,3 +55,21 @@ async def spa_fallback(request: Request, exc: StarletteHTTPException):
         if os.path.exists(index_path):
             return FileResponse(index_path)
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+
+# ── Aliases for frontend convenience ────────────────────────
+@app.get("/api/stats")
+async def stats_alias(account_id: int = None, db=Depends(get_db)):
+    """Alias for /api/analytics/stats for frontend compatibility."""
+    from app.api.v1.analytics import get_stats
+    return await get_stats(account_id=account_id, db=db)
+
+
+@app.post("/api/rebuild-equity/{account_id}")
+async def rebuild_equity(account_id: int, db=Depends(get_db)):
+    """Rebuild equity curve and daily stats for an account."""
+    from app.services.rebuild import rebuild_equity_curve, rebuild_daily_stats
+    curve_result = await rebuild_equity_curve(account_id, db)
+    daily_result = await rebuild_daily_stats(account_id, db)
+    await db.commit()
+    return {"equity": curve_result, "daily": daily_result}

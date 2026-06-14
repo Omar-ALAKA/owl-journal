@@ -6,7 +6,7 @@ from app.api.v1 import import_routes, analytics, calendar, equity
 api_router = APIRouter()
 api_router.include_router(trades.router)
 api_router.include_router(accounts.router)
-api_router.include_router(strategies.router)
+api_router.include_router(strategies.router, prefix="/strategies")
 api_router.include_router(journal.router)
 api_router.include_router(history.router)
 api_router.include_router(challenge.router)
