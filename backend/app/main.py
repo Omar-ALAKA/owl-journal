@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.v1 import api_router
-from app.database import init_db, close_pool
+from app.database import init_db, close_pool, get_db
 import os
 
 
@@ -21,7 +21,7 @@ app = FastAPI(
     title="OWL Journal V4",
     version="4.0.0",
     lifespan=lifespan,
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 # CORS

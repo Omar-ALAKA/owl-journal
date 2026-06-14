@@ -139,7 +139,7 @@ async def get_current_challenge(
                 "type": last_checkpoint.checkpoint_type,
                 "balance": float(last_checkpoint.balance),
                 "equity": float(last_checkpoint.equity),
-                "drawdown": float(last_checkpoint.drawdown or 0),
+                "drawdown": float(last_checkpoint.drawdown_pct or 0),
                 "created_at": last_checkpoint.created_at.isoformat()
                 if last_checkpoint.created_at else None,
             } if last_checkpoint else None,
@@ -190,7 +190,7 @@ async def list_checkpoints(
                 "checkpoint_type": cp.checkpoint_type,
                 "balance": float(cp.balance),
                 "equity": float(cp.equity),
-                "drawdown": float(cp.drawdown or 0),
+                "drawdown": float(cp.drawdown_pct or 0),
                 "notes": cp.notes,
                 "created_at": cp.created_at.isoformat() if cp.created_at else None,
             }
@@ -233,7 +233,7 @@ async def create_checkpoint(data: dict, db: AsyncSession = Depends(get_db)):
         checkpoint_type=data["checkpoint_type"],
         balance=data["balance"],
         equity=data["equity"],
-        drawdown=data.get("drawdown", 0),
+        drawdown_pct=data.get("drawdown_pct", data.get("drawdown", 0)),
         notes=data.get("notes"),
     )
     db.add(checkpoint)
@@ -246,7 +246,7 @@ async def create_checkpoint(data: dict, db: AsyncSession = Depends(get_db)):
         "checkpoint_type": checkpoint.checkpoint_type,
         "balance": float(checkpoint.balance),
         "equity": float(checkpoint.equity),
-        "drawdown": float(checkpoint.drawdown or 0),
+        "drawdown": float(checkpoint.drawdown_pct or 0),
         "notes": checkpoint.notes,
         "created_at": checkpoint.created_at.isoformat()
         if checkpoint.created_at else None,

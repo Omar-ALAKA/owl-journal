@@ -269,8 +269,8 @@ async def get_daily_stats(
                 "gross_profit": float(s.gross_profit or 0),
                 "gross_loss": float(s.gross_loss or 0),
                 "total_trades": s.total_trades or 0,
-                "wins": s.wins or 0,
-                "losses": s.losses or 0,
+                "wins": s.winning_trades or 0,
+                "losses": s.losing_trades or 0,
                 "win_rate": float(s.win_rate or 0),
                 "profit_factor": float(s.profit_factor or 0),
             }
