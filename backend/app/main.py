@@ -73,3 +73,11 @@ async def rebuild_equity(account_id: int, db=Depends(get_db)):
     daily_result = await rebuild_daily_stats(account_id, db)
     await db.commit()
     return {"equity": curve_result, "daily": daily_result}
+
+
+# ── Strategy alias ──────────────────────────────────────────
+@app.get("/api/strategies")
+async def strategies_alias(search: str = None, limit: int = 100, offset: int = 0, db=Depends(get_db)):
+    """Alias for /api/strategies/custom for frontend compatibility."""
+    from app.api.v1.strategies import list_strategies
+    return await list_strategies(search=search, limit=limit, offset=offset, db=db)

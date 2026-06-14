@@ -32,8 +32,6 @@ class DailyStats(Base):
     gross_profit = Column(Numeric(12, 2), default=0)
     gross_loss = Column(Numeric(12, 2), default=0)
     total_trades = Column(Integer, default=0)
-    wins = Column(Integer, default=0)
-    losses = Column(Integer, default=0)
     winning_trades = Column(Integer, default=0)
     losing_trades = Column(Integer, default=0)
     win_rate = Column(Numeric(5, 2), default=0)
@@ -56,8 +54,7 @@ class Checkpoint(Base):
     balance = Column(Numeric(12, 2), nullable=False)
     equity = Column(Numeric(12, 2), nullable=False)
     drawdown_pct = Column(Numeric(6, 2), default=0)
-    drawdown = Column(Numeric(12, 2), default=0)
-    notes = Column(Text)
+    notes = Column("note", Text)
     created_at = Column(DateTime)
 
     account = relationship("Account", back_populates="checkpoints")
