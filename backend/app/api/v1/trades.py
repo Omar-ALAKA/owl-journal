@@ -5,9 +5,20 @@ from sqlalchemy import select, func
 from typing import Optional
 from app.database import get_db
 from app.models.trade import Trade
-from app.schemas.trade import TradeCreate, TradeUpdate, TradeResponse
+from app.schemas.trade import TradeCreate, TradeUpdate
 
 router = APIRouter(prefix="/trades", tags=["trades"])
+
+
+def trade_to_dict(t: Trade) -> dict:
+    """Convert Trade SQLAlchemy model to dict, handling datetime serialization."""
+    d = {}
+    for col in t.__table__.columns:
+        val = getattr(t, col.name)
+        if val is not None and hasattr(val, 'isoformat'):
+            val = val.isoformat()
+        d[col.name] = val
+    return d
 
 
 @router.get("/")
@@ -38,32 +49,32 @@ async def list_trades(
     trades = result.scalars().all()
 
     return {
-        "trades": [TradeResponse.model_validate(t) for t in trades],
+        "trades": [trade_to_dict(t) for t in trades],
         "total": total,
         "offset": offset,
         "limit": limit,
     }
 
 
-@router.get("/{trade_id}", response_model=TradeResponse)
+@router.get("/{trade_id}")
 async def get_trade(trade_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Trade).where(Trade.id == trade_id))
     trade = result.scalar_one_or_none()
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
-    return trade
+    return trade_to_dict(trade)
 
 
-@router.post("/", response_model=TradeResponse)
+@router.post("/")
 async def create_trade(data: TradeCreate, db: AsyncSession = Depends(get_db)):
     trade = Trade(**data.model_dump())
     db.add(trade)
     await db.flush()
     await db.refresh(trade)
-    return trade
+    return trade_to_dict(trade)
 
 
-@router.put("/{trade_id}", response_model=TradeResponse)
+@router.put("/{trade_id}")
 async def update_trade(trade_id: int, data: TradeUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Trade).where(Trade.id == trade_id))
     trade = result.scalar_one_or_none()
@@ -74,7 +85,7 @@ async def update_trade(trade_id: int, data: TradeUpdate, db: AsyncSession = Depe
         setattr(trade, key, value)
     await db.flush()
     await db.refresh(trade)
-    return trade
+    return trade_to_dict(trade)
 
 
 @router.delete("/{trade_id}")
