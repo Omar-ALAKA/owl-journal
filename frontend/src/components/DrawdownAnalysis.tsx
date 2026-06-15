@@ -1,12 +1,15 @@
 // components/DrawdownAnalysis.tsx
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchDrawdownAnalysis } from '../lib/api';
-import { sf, pct } from '../lib/safe';
+import { sf, pct, rfmt } from '../lib/safe';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingDown, AlertTriangle, Clock, Target, Zap, Shield, Activity } from 'lucide-react';
+import { TrendingDown, AlertTriangle, Clock, Target, Zap, Shield, Activity, DollarSign, Percent } from 'lucide-react';
+
+type DdUnit = 'pct' | 'abs' | 'r';
 
 interface Props {
   accountId?: number;
@@ -14,7 +17,14 @@ interface Props {
   dateTo?: string;
 }
 
+function toR(absVal: number | null | undefined, avgLoss: number | null | undefined): number | null {
+  if (!absVal || !avgLoss || avgLoss === 0) return null;
+  return Math.abs(absVal) / avgLoss;
+}
+
 export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
+  const [unit, setUnit] = useState<DdUnit>('pct');
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['drawdown-analysis', accountId, dateFrom, dateTo],
     queryFn: () => fetchDrawdownAnalysis(accountId, dateFrom, dateTo).catch(() => null),
@@ -32,15 +42,84 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
     recovery_probability, blowout_risk, median_recovery_trades, mean_recovery_trades,
   } = data;
 
-  const hasData = underwater_curve.length > 0;
+  // Compute R-multiple values
+  const max_dd_r = toR(max_drawdown_abs, avg_loss);
+  const current_dd_r = toR(Math.abs(current_drawdown_pct) / 100 * peak_equity, avg_loss);
+  const remaining_r = toR(remaining_dd_room, avg_loss);
+
+  // Format a drawdown value according to selected unit
+  function fmtDd(pctVal: number | null | undefined, absVal: number | null | undefined, rVal: number | null | undefined): string {
+    if (unit === 'pct') return pct(pctVal, 2);
+    if (unit === 'abs') return `$${sf(Math.abs(absVal))}`;
+    if (unit === 'r') return rVal != null ? `${sf(rVal)}R` : '-';
+    return '-';
+  }
+
+  // Underwater curve: convert to selected unit
+  const curveData = underwater_curve.map((p: any) => {
+    const ddPct = Math.abs(Number(p.drawdown_pct) || 0);
+    const ddAbs = ddPct / 100 * (peak_equity || 0);
+    const ddR = toR(ddAbs, avg_loss);
+    return {
+      date: p.date,
+      equity: Number(p.equity) || 0,
+      pct: ddPct,
+      abs: ddAbs,
+      r: ddR ?? 0,
+    };
+  });
+
+  const yAxisKey = unit === 'pct' ? 'pct' : unit === 'abs' ? 'abs' : 'r';
+  const yAxisFormatter = (v: number) =>
+    unit === 'pct' ? `${v.toFixed(1)}%` :
+    unit === 'abs' ? `$${v.toFixed(0)}` :
+    `${v.toFixed(1)}R`;
+
+  const tooltipFormatter = (value: any) => {
+    const n = Number(value) || 0;
+    const label = unit === 'pct' ? `${n.toFixed(2)}%` :
+                  unit === 'abs' ? `$${n.toFixed(2)}` :
+                  `${n.toFixed(2)}R`;
+    return [label, 'Drawdown'];
+  };
+
+  const hasData = curveData.length > 0;
   const hasPeriods = drawdown_periods.length > 0;
   const isPositiveEV = (ev_per_trade || 0) > 0;
   const isHealthyRecovery = (recovery_probability || 0) >= 70;
   const isHighBlowout = (blowout_risk || 0) >= 40;
 
+  // Unit toggle buttons
+  const unitOptions: { key: DdUnit; label: string; icon: React.ReactNode }[] = [
+    { key: 'pct', label: '%', icon: <Percent size={14} /> },
+    { key: 'abs', label: '$', icon: <DollarSign size={14} /> },
+    { key: 'r', label: 'R', icon: <Activity size={14} /> },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>Drawdown Analysis</h2>
+      {/* ── Header + Unit Toggle ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>Drawdown Analysis</h2>
+        <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-card-2)', borderRadius: '8px', padding: '3px' }}>
+          {unitOptions.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setUnit(opt.key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                padding: '5px 12px', borderRadius: '6px', border: 'none',
+                fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                background: unit === opt.key ? 'var(--color-accent)' : 'transparent',
+                color: unit === opt.key ? '#0F1419' : 'var(--color-text-muted)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.icon} {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Key Metrics Row ── */}
       <div className="kpi-grid">
@@ -92,7 +171,9 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
           <div className={`kpi-value ${consec_losses_to_overall_limit <= 3 ? 'red' : consec_losses_to_overall_limit <= 5 ? 'yellow' : 'green'}`}>
             {consec_losses_to_overall_limit} losses
           </div>
-          <div className="kpi-sub">${sf(remaining_dd_room)} remaining room</div>
+          <div className="kpi-sub">
+            {unit === 'r' ? `${sf(remaining_r)}R remaining` : `$${sf(remaining_dd_room)} remaining`}
+          </div>
         </div>
 
         <div className="kpi-card">
@@ -106,9 +187,11 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
         <div className="kpi-card">
           <div className="kpi-label"><Activity size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Current Drawdown</div>
           <div className={`kpi-value ${current_drawdown_pct < -20 ? 'red' : current_drawdown_pct < -10 ? 'yellow' : 'green'}`}>
-            {pct(current_drawdown_pct, 2)}
+            {fmtDd(Math.abs(current_drawdown_pct), Math.abs(current_drawdown_pct) / 100 * peak_equity, current_dd_r)}
           </div>
-          <div className="kpi-sub">Max: {pct(max_drawdown_pct, 2)} (${sf(max_drawdown_abs)})</div>
+          <div className="kpi-sub">
+            Max: {fmtDd(Math.abs(max_drawdown_pct), Math.abs(max_drawdown_abs), max_dd_r)}
+          </div>
         </div>
       </div>
 
@@ -142,12 +225,14 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
       {/* ── Underwater Curve ── */}
       {hasData ? (
         <div className="card">
-          <div className="card-title">Underwater Curve</div>
+          <div className="card-title">
+            Underwater Curve
+            <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-muted)', marginLeft: '8px', textTransform: 'none', letterSpacing: 0 }}>
+              ({unit === 'pct' ? '% of peak equity' : unit === 'abs' ? 'USD' : 'R Multiple'})
+            </span>
+          </div>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={underwater_curve.map(p => ({
-              ...p,
-              drawdown_pct: Number(p.drawdown_pct) || 0,
-            }))}>
+            <AreaChart data={curveData}>
               <defs>
                 <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#F87171" stopOpacity={0.6} />
@@ -156,13 +241,13 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="date" tick={{ fill: '#7B8498', fontSize: 10 }} tickFormatter={(v: string) => v?.slice(5) || ''} />
-              <YAxis domain={[0, 'auto']} tick={{ fill: '#7B8498', fontSize: 10 }} tickFormatter={(v: number) => `${v}%`} />
+              <YAxis domain={[0, 'auto']} tick={{ fill: '#7B8498', fontSize: 10 }} tickFormatter={yAxisFormatter} />
               <Tooltip
                 contentStyle={{ background: '#1E2433', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                 labelStyle={{ color: '#7B8498' }}
-                formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Drawdown']}
+                formatter={tooltipFormatter}
               />
-              <Area type="monotone" dataKey="drawdown_pct" stroke="#F87171" fill="url(#ddGrad)" strokeWidth={2} />
+              <Area type="monotone" dataKey={yAxisKey} stroke="#F87171" fill="url(#ddGrad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -177,18 +262,27 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
           <div style={{ overflowX: 'auto' }}>
             <table className="trade-table">
               <thead>
-                <tr><th>Start</th><th>End</th><th>Depth ($)</th><th>Depth (%)</th><th>Duration (days)</th></tr>
+                <tr>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Depth ({unit === 'pct' ? '%' : unit === 'abs' ? '$' : 'R'})</th>
+                  <th>Duration (days)</th>
+                </tr>
               </thead>
               <tbody>
-                {[...drawdown_periods].sort((a, b) => a.depth_pct - b.depth_pct).map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.start || '-'}</td>
-                    <td>{p.end || '-'}</td>
-                    <td className="text-red">{sf(p.depth_abs)}</td>
-                    <td className="text-red">{pct(p.depth_pct)}</td>
-                    <td>{p.duration_days}</td>
-                  </tr>
-                ))}
+                {[...drawdown_periods].sort((a: any, b: any) => a.depth_pct - b.depth_pct).map((p: any, i: number) => {
+                  const depthR = toR(Math.abs(p.depth_abs), avg_loss);
+                  return (
+                    <tr key={i}>
+                      <td>{p.start || '-'}</td>
+                      <td>{p.end || '-'}</td>
+                      <td className="text-red">
+                        {fmtDd(Math.abs(p.depth_pct), Math.abs(p.depth_abs), depthR)}
+                      </td>
+                      <td>{p.duration_days}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
