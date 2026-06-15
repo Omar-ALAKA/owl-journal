@@ -41,6 +41,7 @@ export interface Account {
   target_profit_pct: number;
   max_drawdown_pct: number;
   daily_loss_pct: number;
+  min_trading_days?: number;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -132,6 +133,21 @@ export interface RSummary {
   median_r: number;
   min_r: number;
   max_r: number;
+}
+
+export interface ChallengeStatus {
+  account_id: number;
+  account_name: string;
+  status: string;
+  target_reached: boolean;
+  rules_respected: boolean;
+  trading_days: number;
+  min_trading_days: number;
+  target_profit_pct: number;
+  net_pnl_pct: number;
+  max_drawdown_pct: number;
+  drawdown_limit_pct: number;
+  violations: { type: string; value: number; limit: number; severity: string; date?: string }[];
 }
 
 export interface ChallengeData {
@@ -310,7 +326,7 @@ export interface Strategy {
   id: number;
   name: string;
   description?: string;
-  rules?: Record<string, unknown>;
+  rules?: unknown;
   created_at?: string;
   updated_at?: string;
 }

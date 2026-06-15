@@ -1,6 +1,7 @@
 # app/services/analytics.py
 """Analytics and KPI calculation services."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -10,6 +11,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.trade import Trade
 from app.models.account import Account
 from app.services.equity import calculate_equity_curve
+
+
+def detect_session(open_time: datetime) -> str:
+    """Detect the trading session based on UTC hour of trade open_time.
+
+    Priority:
+      - Asia:        00:00 - 08:59 UTC
+      - London:      07:00 - 11:59 UTC (no overlap with NY)
+      - London/NY:   12:00 - 15:59 UTC (overlap)
+      - New York:    16:00 - 20:59 UTC (no overlap with London)
+      - Outside defined sessions -> returns "Other"
+    """
+    hour = open_time.hour  # open_time is expected to be UTC
+    if 0 <= hour < 9:
+        return "Asia"
+    elif 9 <= hour < 12:
+        return "London"
+    elif 12 <= hour < 16:
+        return "London/NY"
+    elif 16 <= hour < 21:
+        return "New York"
+    else:
+        return "Other"
 
 
 async def calculate_kpis(account_id: int, db: AsyncSession) -> dict[str, Any]:

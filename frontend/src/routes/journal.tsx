@@ -1,16 +1,16 @@
 // routes/journal.tsx
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchJournalSessions, fetchStreaks, fetchJournalDaily, fetchEquityCurve } from '../lib/api';
-import type { JournalSession, StreakData, JournalDaily, EquityPoint } from '../types';
+import { fetchJournalSessions, fetchStreaks, fetchJournalDaily, fetchEquityCurve, fetchChallengeStatus, fetchAccounts } from '../lib/api';
+import type { JournalSession, StreakData, JournalDaily, EquityPoint, ChallengeStatus, Account } from '../types';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell
 } from 'recharts';
-import { TrendingUp, TrendingDown, Flame, Snowflake } from 'lucide-react';
+import { TrendingUp, TrendingDown, Flame, Snowflake, CheckCircle, XCircle } from 'lucide-react';
 
 export function JournalPage() {
-  const [tab, setTab] = useState<'equity' | 'sessions' | 'streaks' | 'daily'>('equity');
+  const [tab, setTab] = useState<'equity' | 'sessions' | 'streaks' | 'daily' | 'challenge'>('equity');
 
   const { data: sessionsData } = useQuery({
     queryKey: ['journal-sessions'],
@@ -32,6 +32,20 @@ export function JournalPage() {
     queryFn: () => fetchEquityCurve().catch(() => ({ points: [] })),
   });
 
+  const { data: accountsData } = useQuery<{ accounts: Account[] }>({
+    queryKey: ['accounts'],
+    queryFn: () => fetchAccounts().catch(() => ({ accounts: [] })),
+  });
+
+  const activeAccount = (accountsData?.accounts || []).find(a => a.status === 'active' && a.account_type === 'challenge')
+    || (accountsData?.accounts || []).find(a => a.status === 'active');
+
+  const { data: challengeStatus } = useQuery<ChallengeStatus>({
+    queryKey: ['challenge-status', activeAccount?.id],
+    queryFn: () => fetchChallengeStatus(activeAccount!.id),
+    enabled: !!activeAccount?.id,
+  });
+
   const sessions: JournalSession[] = sessionsData?.sessions || [];
   const streaks: StreakData = streaksData || { current_streak: { type: null, count: 0 }, max_win_streak: 0, max_loss_streak: 0, avg_win_streak: 0, avg_loss_streak: 0, total_streaks: 0, streaks: [] };
   const daily: JournalDaily[] = dailyData?.daily || [];
@@ -46,6 +60,7 @@ export function JournalPage() {
         <button className={`tab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => setTab('sessions')}>Sessions</button>
         <button className={`tab ${tab === 'streaks' ? 'active' : ''}`} onClick={() => setTab('streaks')}>Streaks</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>Daily</button>
+        <button className={`tab ${tab === 'challenge' ? 'active' : ''}`} onClick={() => setTab('challenge')}>Challenge Status</button>
       </div>
 
       {tab === 'equity' && (
@@ -147,6 +162,93 @@ export function JournalPage() {
               ))}
             </tbody>
           </table>
+        )
+      )}
+
+      {tab === 'challenge' && (
+        !activeAccount ? (
+          <div className="empty-state"><p>No active challenge account found.</p></div>
+        ) : !challengeStatus ? (
+          <div className="empty-state"><p>Loading challenge status...</p></div>
+        ) : (
+          <>
+            <div className="kpi-grid" style={{ marginBottom: '16px' }}>
+              <div className="kpi-card">
+                <div className="kpi-label">Status</div>
+                <div className="kpi-value">
+                  <span className={`badge ${challengeStatus.status === 'completed' ? 'badge-green' : 'badge-orange'}`}>
+                    {challengeStatus.status === 'completed' ? 'COMPLETED' : 'IN PROGRESS'}
+                  </span>
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Target Reached</div>
+                <div className="kpi-value">
+                  {challengeStatus.target_reached ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-green)' }}>
+                      <CheckCircle size={18} /> Yes
+                    </span>
+                  ) : (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-red)' }}>
+                      <XCircle size={18} /> No
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Rules Respected</div>
+                <div className="kpi-value">
+                  {challengeStatus.rules_respected ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-green)' }}>
+                      <CheckCircle size={18} /> Yes
+                    </span>
+                  ) : (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-red)' }}>
+                      <XCircle size={18} /> No
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Trading Days</div>
+                <div className="kpi-value">
+                  {challengeStatus.trading_days}/{challengeStatus.min_trading_days || '∞'}
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Progress</div>
+                <div className="kpi-value">
+                  {challengeStatus.net_pnl_pct >= 0 ? '+' : ''}{challengeStatus.net_pnl_pct.toFixed(2)}% / {challengeStatus.target_profit_pct}%
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Max Drawdown</div>
+                <div className="kpi-value">
+                  {challengeStatus.max_drawdown_pct.toFixed(2)}% / {challengeStatus.drawdown_limit_pct}%
+                </div>
+              </div>
+            </div>
+
+            {challengeStatus.violations && challengeStatus.violations.length > 0 && (
+              <div className="card">
+                <div className="card-title" style={{ color: 'var(--color-red)' }}>Violations ({challengeStatus.violations.length})</div>
+                <table className="trade-table">
+                  <thead><tr><th>Type</th><th>Value</th><th>Limit</th><th>Severity</th><th>Date</th></tr></thead>
+                  <tbody>
+                    {challengeStatus.violations.map((v, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 600 }}>{v.type.replace(/_/g, ' ')}</td>
+                        <td className="text-red">{v.value.toFixed(2)}</td>
+                        <td>{v.limit}</td>
+                        <td><span className={`badge ${v.severity === 'critical' ? 'badge-red' : 'badge-orange'}`}>{v.severity}</span></td>
+                        <td className="text-muted">{v.date || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )
       )}
     </div>

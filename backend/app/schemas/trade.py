@@ -39,6 +39,8 @@ class TradeUpdate(BaseModel):
     sl_price: Optional[float] = None
     tp_price: Optional[float] = None
     profit: Optional[float] = None
+    commission: Optional[float] = None
+    swap: Optional[float] = None
     session: Optional[str] = None
     setup: Optional[str] = None
     confluences: Optional[str] = None
@@ -46,6 +48,13 @@ class TradeUpdate(BaseModel):
     setup_quality: Optional[int] = None
     rr_target: Optional[float] = None
     rr_actual: Optional[float] = None
+    r_multiple: Optional[float] = None
+    sl_distance: Optional[float] = None
+    tp_distance: Optional[float] = None
+    is_winner: Optional[int] = None
+    chart_url: Optional[str] = None
+    ticket: Optional[str] = None
+    open_time: Optional[datetime] = None
     close_time: Optional[datetime] = None
 
 

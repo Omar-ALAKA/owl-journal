@@ -269,6 +269,132 @@ async def create_checkpoint(data: dict, db: AsyncSession = Depends(get_db)):
 
 
 # ───────────────────────────────────────────────────────────
+# GET /challenge/status/{account_id}  — Resume complet du challenge
+# ───────────────────────────────────────────────────────────
+@router.get("/status/{account_id}")
+async def get_challenge_status(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a comprehensive challenge status snapshot for one account."""
+    acc_result = await db.execute(
+        select(Account).where(Account.id == account_id)
+    )
+    acc = acc_result.scalar_one_or_none()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    starting = float(acc.starting_balance or 0)
+
+    # --- All closed trades ---
+    trade_query = (
+        select(Trade.profit, Trade.open_time, Trade.close_time)
+        .where(
+            and_(
+                Trade.account_id == account_id,
+                Trade.close_time.isnot(None),
+            )
+        )
+        .order_by(Trade.open_time.asc())
+    )
+    trade_result = await db.execute(trade_query)
+    trade_rows = trade_result.all()
+
+    net_pnl = sum(float(r[0] or 0) for r in trade_rows)
+
+    # --- Trading days (distinct dates from open_time) ---
+    trading_days_query = select(
+        func.count(func.distinct(func.date(Trade.open_time))).label("trading_days")
+    ).where(
+        and_(
+            Trade.account_id == account_id,
+            Trade.close_time.isnot(None),
+        )
+    )
+    trading_days_result = await db.execute(trading_days_query)
+    trading_days = trading_days_result.scalar() or 0
+    min_trading_days = acc.min_trading_days or 0
+    trading_days_met = trading_days >= min_trading_days
+
+    # --- Max drawdown ---
+    profits = [float(r[0]) for r in trade_rows]
+    peak = starting
+    running = starting
+    max_dd = 0
+    for p in profits:
+        running += p
+        if running > peak:
+            peak = running
+        dd = peak - running
+        if dd > max_dd:
+            max_dd = dd
+    max_drawdown_pct = (max_dd / starting * 100) if starting > 0 else 0
+    dd_limit = float(acc.max_drawdown_pct or 7)
+
+    # --- Target ---
+    target_pct = float(acc.target_profit_pct or 10)
+    target_amount = starting * target_pct / 100
+    target_reached = net_pnl >= target_amount
+    progress_pct = (net_pnl / target_amount * 100) if target_amount > 0 else 0
+
+    # --- Daily loss violations ---
+    daily_pnl: dict[str, float] = {}
+    for r in trade_rows:
+        day_key = r[1].strftime("%Y-%m-%d")  # open_time
+        daily_pnl[day_key] = daily_pnl.get(day_key, 0) + float(r[0] or 0)
+
+    daily_loss_limit = float(acc.daily_loss_pct or 5)
+    daily_loss_violations = 0
+    violation_list = []
+    for day, day_pnl in daily_pnl.items():
+        if day_pnl < 0:
+            day_loss_pct = abs(day_pnl) / starting * 100 if starting > 0 else 0
+            if day_loss_pct > daily_loss_limit:
+                daily_loss_violations += 1
+                violation_list.append({
+                    "type": "daily_loss_exceeded",
+                    "date": day,
+                    "daily_pnl": round(day_pnl, 2),
+                    "daily_loss_pct": round(day_loss_pct, 2),
+                    "limit": daily_loss_limit,
+                    "severity": "critical",
+                })
+
+    # DD violation
+    if max_drawdown_pct > dd_limit:
+        violation_list.append({
+            "type": "max_drawdown_exceeded",
+            "value": round(max_drawdown_pct, 2),
+            "limit": dd_limit,
+            "severity": "critical",
+        })
+
+    # Rules respected
+    rules_respected = (
+        max_drawdown_pct <= dd_limit
+        and daily_loss_violations == 0
+        and trading_days_met
+    )
+
+    challenge_complete = target_reached and rules_respected
+
+    return {
+        "challenge_complete": challenge_complete,
+        "target_reached": target_reached,
+        "rules_respected": rules_respected,
+        "net_pnl": round(net_pnl, 2),
+        "target_amount": round(target_amount, 2),
+        "progress_pct": round(progress_pct, 2),
+        "max_drawdown_pct": round(max_drawdown_pct, 2),
+        "drawdown_limit_pct": dd_limit,
+        "trading_days": trading_days,
+        "min_trading_days": min_trading_days,
+        "trading_days_met": trading_days_met,
+        "violations": violation_list,
+    }
+
+
+# ───────────────────────────────────────────────────────────
 # DELETE /challenge/checkpoints/{id}  — Supprimer un jalon
 # ───────────────────────────────────────────────────────────
 @router.delete("/checkpoints/{checkpoint_id}")

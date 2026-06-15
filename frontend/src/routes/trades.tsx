@@ -1,15 +1,17 @@
 // routes/trades.tsx
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchTrades, deleteTrade, fetchAccounts } from '../lib/api';
+import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api';
 import type { Trade, Account } from '../types';
-import { Trash2, Filter, X } from 'lucide-react';
+import { Trash2, Filter, X, Edit2 } from 'lucide-react';
 
 export function TradesPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Trade>>({});
   const limit = 50;
 
   const { data } = useQuery({
@@ -31,6 +33,32 @@ export function TradesPage() {
     if (!confirm('Delete this trade?')) return;
     await deleteTrade(id);
     qc.invalidateQueries({ queryKey: ['trades'] });
+  };
+
+  const openEdit = (t: Trade) => {
+    setEditingTrade(t);
+    setEditForm({
+      symbol: t.symbol,
+      direction: t.direction,
+      volume: t.volume,
+      entry_price: t.entry_price,
+      exit_price: t.exit_price,
+      sl_price: t.sl_price,
+      tp_price: t.tp_price,
+      commission: t.commission,
+      swap: t.swap,
+      profit: t.profit,
+      session: t.session,
+      setup: t.setup,
+      notes: t.notes,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTrade) return;
+    await updateTrade(editingTrade.id, editForm);
+    qc.invalidateQueries({ queryKey: ['trades'] });
+    setEditingTrade(null);
   };
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v);
@@ -126,7 +154,10 @@ export function TradesPage() {
                     <td>{t.session ? <span className="badge badge-blue">{t.session}</span> : '-'}</td>
                     <td className="text-muted">{t.setup || '-'}</td>
                     <td>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(t.id)}><Trash2 size={12} /></button>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => openEdit(t)}><Edit2 size={12} /></button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(t.id)}><Trash2 size={12} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -145,6 +176,98 @@ export function TradesPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Edit Trade Modal */}
+      {editingTrade && (
+        <div className="modal-overlay" onClick={() => setEditingTrade(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>Edit Trade #{editingTrade.id}</h2>
+              <button className="modal-close" onClick={() => setEditingTrade(null)}><X size={20} /></button>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Symbol</label>
+                <input className="form-input" value={editForm.symbol || ''} onChange={e => setEditForm({ ...editForm, symbol: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Direction</label>
+                <select className="form-select" value={editForm.direction || 'long'} onChange={e => setEditForm({ ...editForm, direction: e.target.value as 'long' | 'short' })}>
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Volume</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.volume ?? ''} onChange={e => setEditForm({ ...editForm, volume: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Entry Price</label>
+                <input className="form-input" type="number" step="0.0001" value={editForm.entry_price ?? ''} onChange={e => setEditForm({ ...editForm, entry_price: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Exit Price</label>
+                <input className="form-input" type="number" step="0.0001" value={editForm.exit_price ?? ''} onChange={e => setEditForm({ ...editForm, exit_price: parseFloat(e.target.value) || undefined })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">SL Price</label>
+                <input className="form-input" type="number" step="0.0001" value={editForm.sl_price ?? ''} onChange={e => setEditForm({ ...editForm, sl_price: parseFloat(e.target.value) || undefined })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">TP Price</label>
+                <input className="form-input" type="number" step="0.0001" value={editForm.tp_price ?? ''} onChange={e => setEditForm({ ...editForm, tp_price: parseFloat(e.target.value) || undefined })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Profit</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.profit ?? ''} onChange={e => setEditForm({ ...editForm, profit: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Commission</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.commission ?? ''} onChange={e => setEditForm({ ...editForm, commission: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Swap</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.swap ?? ''} onChange={e => setEditForm({ ...editForm, swap: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Session</label>
+                <select className="form-select" value={editForm.session || ''} onChange={e => setEditForm({ ...editForm, session: e.target.value })}>
+                  <option value="">-</option>
+                  <option value="london">London</option>
+                  <option value="newyork">New York</option>
+                  <option value="asia">Asia</option>
+                  <option value="overlap">Overlap</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Setup</label>
+                <input className="form-input" value={editForm.setup || ''} onChange={e => setEditForm({ ...editForm, setup: e.target.value })} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <input className="form-input" value={editForm.notes || ''} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', marginTop: '20px' }}>
+              <button className="btn btn-danger" onClick={() => { handleDelete(editingTrade.id); setEditingTrade(null); }}><Trash2 size={14} /> Delete</button>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button className="btn btn-secondary" onClick={() => setEditingTrade(null)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleSaveEdit}>Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
