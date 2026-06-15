@@ -5,7 +5,7 @@ import { fetchSessionAnalysis, fetchSetupAnalysis, fetchRDistribution, fetchDail
 import type { SessionStat, SetupStat, RBucket, RSummary, DailyStat } from '../types';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, PieChart, Pie
+  ResponsiveContainer, Cell
 } from 'recharts';
 import { Target, Clock, BarChart3 } from 'lucide-react';
 

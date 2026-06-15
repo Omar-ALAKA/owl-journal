@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.strategy import Strategy, Tag, TradeTag
 from app.models.trade import Trade
 
-router = APIRouter(prefix="/strategies/custom", tags=["strategies"])
+router = APIRouter(prefix="/custom", tags=["strategies"])
 
 
 # ──────────────────────────────────────────────

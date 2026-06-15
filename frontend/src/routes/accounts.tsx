@@ -15,7 +15,7 @@ export function AccountsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [form, setForm] = useState({
-    name: '', broker: '', broker_acct: '', account_type: 'challenge' as const,
+    name: '', broker: '', broker_acct: '', account_type: 'challenge' as 'challenge' | 'funded' | 'personal',
     phase: '', status: 'active', starting_balance: '', target_profit_pct: '10',
     max_drawdown_pct: '7', daily_loss_pct: '5', notes: '',
   });

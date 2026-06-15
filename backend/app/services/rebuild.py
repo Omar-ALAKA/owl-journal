@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select, delete, and_, cast, Date, func
+from sqlalchemy import select, delete, and_, cast, Date, func, text, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.trade import Trade
@@ -107,59 +107,62 @@ async def rebuild_daily_stats(
     )
     await db.flush()
 
-    # Aggregate trades by day
-    agg_result = await db.execute(
-        select(
-            cast(Trade.close_time, Date).label("trade_date"),
-            func.count(Trade.id).label("total_trades"),
-            func.sum(
-                func.case((Trade.profit > 0, Trade.profit), else_=0)
-            ).label("gross_profit"),
-            func.sum(
-                func.case((Trade.profit <= 0, Trade.profit), else_=0)
-            ).label("gross_loss"),
-            func.sum(Trade.profit + Trade.commission + Trade.swap).label("net_pnl"),
-            func.sum(
-                func.case((Trade.profit > 0, 1), else_=0)
-            ).label("wins"),
-            func.sum(
-                func.case((Trade.profit <= 0, 1), else_=0)
-            ).label("losses"),
-        )
+    # Fetch closed trades and aggregate in Python (avoids SQLAlchemy func.case/asyncpg issues)
+    trades_result = await db.execute(
+        select(Trade)
         .where(
             and_(
                 Trade.account_id == account_id,
                 Trade.close_time.isnot(None),
             )
         )
-        .group_by(cast(Trade.close_time, Date))
-        .order_by(cast(Trade.close_time, Date).asc())
+        .order_by(Trade.close_time.asc())
     )
+    trades = trades_result.scalars().all()
 
-    rows = agg_result.all()
+    # Aggregate by day in Python
+    from collections import defaultdict
+    daily_agg = defaultdict(lambda: {
+        "profits": [], "total": 0, "wins": 0, "losses": 0,
+        "gross_profit": 0.0, "gross_loss": 0.0, "net_pnl": 0.0,
+    })
+
+    for t in trades:
+        day_key = t.close_time.date()
+        d = daily_agg[day_key]
+        d["total"] += 1
+        pnl = float(t.profit or 0)
+        comm = float(t.commission or 0)
+        swp = float(t.swap or 0)
+        net = pnl + comm + swp
+        d["net_pnl"] += net
+        if pnl > 0:
+            d["wins"] += 1
+            d["gross_profit"] += pnl
+        elif pnl <= 0:
+            d["losses"] += 1
+            d["gross_loss"] += pnl
+
     days_created = 0
-
-    for row in rows:
-        trade_date = row.trade_date
-        total_trades = row.total_trades or 0
-        wins = row.wins or 0
-        losses = row.losses or 0
-        gross_profit = float(row.gross_profit or 0)
-        gross_loss = abs(float(row.gross_loss or 0))
-        net_pnl = float(row.net_pnl or 0)
-
-        win_rate = round(wins / total_trades * 100, 2) if total_trades > 0 else 0
+    for day_key in sorted(daily_agg.keys()):
+        d = daily_agg[day_key]
+        total = d["total"]
+        wins = d["wins"]
+        gross_profit = d["gross_profit"]
+        gross_loss = abs(d["gross_loss"])
+        net_pnl = d["net_pnl"]
+        win_rate = round(wins / total * 100, 2) if total > 0 else 0
         profit_factor = round(gross_profit / gross_loss, 3) if gross_loss > 0 else 0
 
         stat = DailyStats(
             account_id=account_id,
-            trade_date=datetime.combine(trade_date, datetime.min.time()),
+            trade_date=datetime.combine(day_key, datetime.min.time()),
             net_pnl=round(net_pnl, 2),
             gross_profit=round(gross_profit, 2),
             gross_loss=round(gross_loss, 2),
-            total_trades=total_trades,
+            total_trades=total,
             wins=wins,
-            losses=losses,
+            losses=d["losses"],
             win_rate=win_rate,
             profit_factor=profit_factor,
         )
@@ -172,5 +175,5 @@ async def rebuild_daily_stats(
         "status": "success",
         "account_id": account_id,
         "days_created": days_created,
-        "total_trades_processed": sum(r.total_trades or 0 for r in rows),
+        "total_trades_processed": len(trades),
     }

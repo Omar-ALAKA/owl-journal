@@ -9,7 +9,7 @@ import {
 import { TrendingUp, TrendingDown, Target, Activity, DollarSign, BarChart3 } from 'lucide-react';
 
 export function DashboardPage() {
-  const { data: stats } = useQuery<Stats>({
+  const { data: stats } = useQuery<Stats | null>({
     queryKey: ['stats'],
     queryFn: () => fetchStats().catch(() => null),
   });
@@ -39,7 +39,7 @@ export function DashboardPage() {
     }
   }
 
-  const s: Stats = stats || {
+  const s: Stats = stats ?? {
     net_profit: 0, gross_profit: 0, gross_loss: 0, total_trades: 0,
     wins: 0, losses: 0, breakeven: 0, win_rate: 0, profit_factor: 0,
     avg_win: 0, avg_loss: 0, avg_r: 0, best_r: 0, worst_r: 0,

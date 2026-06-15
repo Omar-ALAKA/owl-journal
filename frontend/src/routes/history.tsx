@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchHistory } from '../lib/api';
 import type { HistoryAccount } from '../types';
-import { Trophy, TrendingUp, TrendingDown } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 
 export function HistoryPage() {
   const { data, isLoading } = useQuery({

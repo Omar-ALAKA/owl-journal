@@ -1,8 +1,8 @@
 // routes/import.tsx
 import { useState, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { previewImport, confirmImport, fetchAccounts } from '../lib/api';
-import type { ImportPreview, Account, Trade } from '../types';
+import type { ImportPreview, Account } from '../types';
 import { Upload, FileText, Check, AlertTriangle, X } from 'lucide-react';
 
 export function ImportPage() {
@@ -15,11 +15,45 @@ export function ImportPage() {
   const [importResult, setImportResult] = useState<{ message: string; inserted: number; errors: unknown[] } | null>(null);
   const [selectedTrades, setSelectedTrades] = useState<Set<number>>(new Set());
 
-  const { data: accountsData } = useQuery({
+  const { data: accountsData, isLoading: accountsLoading, error: accountsError } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => fetchAccounts().catch(() => ({ accounts: [] })),
   });
   const accounts: Account[] = accountsData?.accounts || [];
+
+  if (accountsLoading) {
+    return (
+      <div className="page">
+        <div className="page-header"><h1>Import Trades</h1></div>
+        <div className="empty-state"><p>Loading accounts...</p></div>
+      </div>
+    );
+  }
+
+  if (accountsError) {
+    return (
+      <div className="page">
+        <div className="page-header"><h1>Import Trades</h1></div>
+        <div className="empty-state">
+          <AlertTriangle size={40} color="var(--color-red)" style={{ marginBottom: '12px' }} />
+          <p>Error loading accounts. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <div className="page">
+        <div className="page-header"><h1>Import Trades</h1></div>
+        <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+          <AlertTriangle size={40} color="var(--color-accent)" style={{ marginBottom: '12px' }} />
+          <p style={{ fontWeight: 600, marginBottom: '8px' }}>No accounts available</p>
+          <p className="text-muted" style={{ fontSize: '14px' }}>You need to create an account first before importing trades.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -1,16 +1,20 @@
-# app/api/v1/import.py
+# app/api/v1/import_routes.py
 import csv
 import io
+import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.trade import Trade
 from app.models.account import Account
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -18,94 +22,90 @@ router = APIRouter(prefix="/import", tags=["import"])
 # Format detection & column mapping
 # ───────────────────────────────────────────────────────────
 
-# Known column name variants (lowercased)
 COLUMN_MAP = {
-    # identity
-    "ticket": ["ticket", "order", "order id", "trade id", "deal", "#"],
-    # open time
+    "ticket": ["ticket", "order", "order id", "trade id", "deal", "#", "trade #", "deal id", "position", "trade #"],
     "open_time": [
         "open time", "opentime", "open_time", "time", "date/time",
         "opening time", "open", "datetime", "timestamp", "time opened",
+        "open date", "date opened", "heure", "date d'ouverture", "heure d'ouverture",
     ],
-    # close time
     "close_time": [
         "close time", "closetime", "close_time", "closing time",
-        "close", "time closed", "time closed",
+        "close", "time closed", "closing date", "date closed", "time closed",
+        "heure de fermeture", "date de fermeture", "heure",
     ],
-    # symbol
-    "symbol": ["symbol", "instrument", "pair", "ticker", "market"],
-    # direction
+    "symbol": ["symbol", "instrument", "pair", "ticker", "market", "asset", "symbole"],
     "direction": [
         "direction", "type", "side", "trade type", "order type",
-        "transaction type", "cmd", "type",
+        "transaction type", "cmd", "operation", "order type",
     ],
-    # volume / lots
     "volume": [
         "volume", "size", "lots", "quantity", "qty", "amount",
-        "volume (lots)", "size (lots)",
+        "volume (lots)", "size (lots)", "volume(lots)", "lot",
     ],
-    # entry price
     "entry_price": [
         "entry price", "entry_price", "open price", "price",
-        "opening price", "entry", "open price",
+        "opening price", "entry", "entry price", "open px", "buy price", "sell price",
+        "prix", "prix d'entrée", "prix ouverture",
     ],
-    # exit price
     "exit_price": [
         "exit price", "exit_price", "close price", "closing price",
-        "exit", "close price",
+        "exit", "close price", "close px", "prix de sortie", "prix fermeture", "prix",
     ],
-    # stop loss
     "sl_price": [
         "sl", "stop loss", "sl_price", "stoploss", "stop loss price",
-        "sl price",
+        "sl price", "stop loss (sl)", "s / l", "stop loss", "sl",
     ],
-    # take profit
     "tp_price": [
         "tp", "take profit", "tp_price", "takeprofit", "take profit price",
-        "tp price",
+        "tp price", "take profit (tp)", "t / p", "take profit", "tp",
     ],
-    # commission
-    "commission": ["commission", "comm", "commissions", "fee", "fees"],
-    # swap
-    "swap": ["swap", "swap charge", "rollover"],
-    # profit
+    "commission": ["commission", "comm", "commissions", "fee", "fees", "commission (comm)"],
+    "swap": ["swap", "swap charge", "rollover", "echange"],
     "profit": [
         "profit", "pnl", "p&l", "net pnl", "gain", "pnl (usd)",
-        "profit (usd)", "profit (usd)", "net profit",
+        "profit (usd)", "net profit", "result", "pnl (result)",
+        "realized p&l", "closed p/l",
     ],
-    # r_multiple
-    "r_multiple": ["r multiple", "r_multiple", "r:r", "r/r", "rr"],
-    # session
+    "r_multiple": ["r multiple", "r_multiple", "r:r", "r/r", "rr", "r multiple (rm)"],
     "session": ["session", "trading session", "session name"],
-    # setup
     "setup": ["setup", "strategy", "setup name", "trade setup"],
-    # notes
     "notes": ["notes", "comment", "comments", "remark", "remarks"],
 }
 
 
 def _normalize_header(header: str) -> str:
-    """Lowercase, strip, collapse whitespace."""
+    if header is None:
+        return ""
     return re.sub(r"\s+", " ", header.strip().lower())
 
 
 def _map_columns(headers: list[str]) -> dict[str, int]:
-    """
-    Returns mapping: canonical_name -> column_index.
-    Uses first match wins.
-    """
     normalized = [_normalize_header(h) for h in headers]
     mapping: dict[str, int] = {}
+    used_indices: set[int] = set()
+
     for canonical, variants in COLUMN_MAP.items():
         for idx, norm in enumerate(normalized):
-            if norm in variants and canonical not in mapping:
+            if norm in variants and canonical not in mapping and idx not in used_indices:
                 mapping[canonical] = idx
+                used_indices.add(idx)
                 break
+
+    # Second pass: handle duplicate headers (e.g. "Heure" appears twice in Equity Edge)
+    # Map unmapped canonical fields to columns with already-used header names
+    for canonical, variants in COLUMN_MAP.items():
+        if canonical not in mapping:
+            for idx, norm in enumerate(normalized):
+                if norm in variants and idx not in used_indices:
+                    mapping[canonical] = idx
+                    used_indices.add(idx)
+                    break
+
     return mapping
 
 
 def _safe_float(val: Any) -> float:
-    """Parse a float from string, handling commas, currency symbols, etc."""
     if val is None:
         return 0.0
     if isinstance(val, (int, float)):
@@ -113,9 +113,7 @@ def _safe_float(val: Any) -> float:
     s = str(val).strip()
     if not s or s in ("-", "—", "N/A", "n/a"):
         return 0.0
-    # Remove currency symbols and thousands separators
     s = re.sub(r"[£€$¥₹,\s]", "", s)
-    # Handle parentheses as negative
     if s.startswith("(") and s.endswith(")"):
         s = "-" + s[1:-1]
     try:
@@ -125,15 +123,21 @@ def _safe_float(val: Any) -> float:
 
 
 def _safe_datetime(val: Any, fmt_hints: list[str] | None = None) -> datetime | None:
-    """Parse a datetime from various formats."""
     if val is None:
         return None
     if isinstance(val, datetime):
         return val
+    # Handle Excel serial date (float)
+    if isinstance(val, float):
+        try:
+            # Excel epoch: 1899-12-30 + days
+            if 1 < val < 200000:  # reasonable range
+                return datetime(1899, 12, 30) + timedelta(days=int(val))
+        except (ValueError, OverflowError):
+            pass
     s = str(val).strip()
     if not s or s in ("-", "—", "N/A", "n/a"):
         return None
-
     formats = fmt_hints or [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M",
@@ -162,37 +166,59 @@ def _safe_datetime(val: Any, fmt_hints: list[str] | None = None) -> datetime | N
 
 
 def _detect_direction(val: Any) -> str:
-    """Normalize direction string."""
     if val is None:
         return ""
     s = str(val).strip().lower()
-    if s in ("buy", "long", "b", "1"):
+    if s in ("buy", "long", "b", "1", "buy market"):
         return "long"
-    if s in ("sell", "short", "s", "-1", "2"):
+    if s in ("sell", "short", "s", "-1", "2", "sell market"):
         return "short"
     return s
 
 
 def _detect_format(headers: list[str]) -> str:
-    """Heuristic to detect the broker export format."""
     normalized = [_normalize_header(h) for h in headers]
     joined = " ".join(normalized)
 
-    # FTMO: typically has "Deal", "Symbol", "Type", "Volume", "Price", etc.
-    if any(h in normalized for h in ["deal", "order"]) and "profit" in joined:
-        if "swap" in joined and "commission" in joined:
-            return "ftmo"
+    # MT5: has "Deal", "Symbol", "Type", "Volume", "Price", "SL", "TP", "Profit", "Commission", "Swap"
+    if any(h in normalized for h in ["deal", "deal id"]) and "profit" in joined:
+        if "swap" in joined or "commission" in joined:
+            return "mt5"
+
+    # FTMO: similar to MT5 but with specific columns
+    if "deal" in joined and "swap" in joined and "commission" in joined:
+        return "ftmo"
 
     # MyFundedFX: has "Ticket", "Open Time", "Close Time", "Symbol", "Type"
     if "ticket" in joined and ("open time" in joined or "opening time" in joined):
         return "myfundedfx"
 
-    # Equity Edge: has "Trade #", "Signal", "Entry", "Exit"
+    # Equity Edge: has French headers "Heure", "Symbole", "Type", "S / L", "T / P", "Commission", "Echange"
+    if "symbole" in joined and ("s / l" in joined or "t / p" in joined) and "echange" in joined:
+        return "equity_edge"
+    # Equity Edge English variant
     if "signal" in joined or "equity edge" in joined:
         return "equity_edge"
 
-    # Generic CSV
+    # FundedNext: similar to FTMO
+    if "order" in joined and "profit" in joined and "swap" in joined:
+        return "fundednext"
+
     return "generic"
+
+
+def _cell_to_str(cell: Any) -> str:
+    """Convert an openpyxl cell value to string, handling numbers."""
+    if cell is None:
+        return ""
+    if isinstance(cell, datetime):
+        return cell.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(cell, float):
+        # Format float: remove trailing zeros
+        if cell == int(cell):
+            return str(int(cell))
+        return str(cell)
+    return str(cell).strip()
 
 
 def _parse_csv_content(content: str) -> list[dict]:
@@ -223,11 +249,11 @@ def _parse_csv_content(content: str) -> list[dict]:
         close_time = _safe_datetime(close_time_raw)
 
         if not open_time:
-            continue  # Skip rows without open time
+            continue
 
         symbol = get("symbol")
         if not symbol:
-            continue  # Skip rows without symbol
+            continue
 
         direction = _detect_direction(get("direction"))
         volume = _safe_float(get("volume"))
@@ -244,15 +270,8 @@ def _parse_csv_content(content: str) -> list[dict]:
         notes = get("notes")
         ticket = get("ticket")
 
-        # Infer direction from profit if not set
         if not direction and profit != 0:
             direction = "long" if profit > 0 else "short"
-
-        # Infer exit price from entry + profit if missing
-        if exit_price == 0 and profit != 0 and entry_price != 0 and volume != 0:
-            # Rough estimate: profit = (exit - entry) * volume * 100000 (for forex)
-            # This is approximate; better to have actual exit price
-            pass
 
         trade = {
             "ticket": ticket or None,
@@ -279,8 +298,112 @@ def _parse_csv_content(content: str) -> list[dict]:
     return trades
 
 
+def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
+    """Parse XLSX content directly using openpyxl, handling Excel dates and multi-row headers."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content_bytes), read_only=True, data_only=True)
+
+    all_trades = []
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+
+        if len(rows) < 2:
+            continue
+
+        # Find header row: first row with at least 3 non-empty cells
+        header_row_idx = 0
+        for i, row in enumerate(rows):
+            non_empty = sum(1 for c in row if c is not None and str(c).strip())
+            if non_empty >= 3:
+                header_row_idx = i
+                break
+
+        headers_raw = rows[header_row_idx]
+        headers = [_cell_to_str(h) for h in headers_raw]
+        logger.info(f"XLSX sheet '{sheet_name}' headers (row {header_row_idx}): {headers}")
+
+        # Detect format from headers
+        fmt = _detect_format(headers)
+
+        # Map columns
+        col_map = _map_columns(headers)
+        logger.info(f"XLSX column mapping: {col_map}")
+
+        # Parse data rows
+        for row in rows[header_row_idx + 1:]:
+            if all(c is None for c in row):
+                continue
+
+            # Convert all cells to strings
+            str_row = [_cell_to_str(c) for c in row]
+
+            def get(col_name: str, default: str = "") -> str:
+                idx = col_map.get(col_name)
+                if idx is None or idx >= len(str_row):
+                    return default
+                return str_row[idx]
+
+            open_time_raw = get("open_time")
+            close_time_raw = get("close_time")
+            open_time = _safe_datetime(open_time_raw)
+            close_time = _safe_datetime(close_time_raw)
+
+            if not open_time:
+                continue
+
+            symbol = get("symbol")
+            if not symbol:
+                continue
+
+            direction = _detect_direction(get("direction"))
+            volume = _safe_float(get("volume"))
+            entry_price = _safe_float(get("entry_price"))
+            exit_price = _safe_float(get("exit_price"))
+            sl_price = _safe_float(get("sl_price"))
+            tp_price = _safe_float(get("tp_price"))
+            commission = _safe_float(get("commission"))
+            swap = _safe_float(get("swap"))
+            profit = _safe_float(get("profit"))
+            r_multiple = _safe_float(get("r_multiple"))
+            session = get("session")
+            setup = get("setup")
+            notes = get("notes")
+            ticket = get("ticket")
+
+            if not direction and profit != 0:
+                direction = "long" if profit > 0 else "short"
+
+            trade = {
+                "ticket": ticket or None,
+                "open_time": open_time.isoformat(),
+                "close_time": close_time.isoformat() if close_time else None,
+                "symbol": symbol.upper(),
+                "direction": direction or "long",
+                "volume": volume,
+                "entry_price": entry_price,
+                "exit_price": exit_price if exit_price > 0 else None,
+                "sl_price": sl_price if sl_price > 0 else None,
+                "tp_price": tp_price if tp_price > 0 else None,
+                "commission": commission,
+                "swap": swap,
+                "profit": profit,
+                "r_multiple": r_multiple if r_multiple > 0 else None,
+                "session": session or None,
+                "setup": setup or None,
+                "notes": notes or None,
+                "detected_format": fmt,
+            }
+            all_trades.append(trade)
+
+    logger.info(f"XLSX parsed: {len(all_trades)} trades from {len(wb.sheetnames)} sheet(s)")
+    return all_trades
+
+
 # ───────────────────────────────────────────────────────────
-# POST /import/preview  — Parser un fichier sans sauvegarder
+# POST /import/preview
 # ───────────────────────────────────────────────────────────
 @router.post("/preview")
 async def preview_import(
@@ -288,23 +411,18 @@ async def preview_import(
     account_id: int = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Parse un fichier CSV/XLSX et retourne les trades détectés
-    sans les sauvegarder en base.
-    """
-
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
+    logger.info(f"Import preview: file={file.filename}")
     filename = file.filename.lower()
 
-    # Lire le contenu
     content_bytes = await file.read()
-    if len(content_bytes) > 10 * 1024 * 1024:  # 10MB limit
+    logger.info(f"Import preview: file={file.filename}, size={len(content_bytes)}")
+    if len(content_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 10MB)")
 
     if filename.endswith(".csv") or filename.endswith(".txt"):
-        # Essayer plusieurs encodages
         for encoding in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
             try:
                 content = content_bytes.decode(encoding)
@@ -313,28 +431,11 @@ async def preview_import(
                 continue
         else:
             raise HTTPException(400, detail="Unable to decode file")
-
         trades = _parse_csv_content(content)
 
     elif filename.endswith((".xlsx", ".xls")):
         try:
-            import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(content_bytes), read_only=True)
-            ws = wb.active
-            rows = list(ws.iter_rows(values_only=True))
-            if len(rows) < 2:
-                raise HTTPException(400, detail="Empty spreadsheet")
-
-            headers = [str(h) if h else "" for h in rows[0]]
-            content_lines = []
-            content_lines.append(",".join(headers))
-            for row in rows[1:]:
-                line = ",".join(
-                    str(c) if c is not None else "" for c in row
-                )
-                content_lines.append(line)
-            content = "\n".join(content_lines)
-            trades = _parse_csv_content(content)
+            trades = _parse_xlsx_content(content_bytes)
         except ImportError:
             raise HTTPException(
                 500,
@@ -346,7 +447,6 @@ async def preview_import(
             detail="Unsupported file format. Use .csv, .txt, .xlsx, or .xls",
         )
 
-    # Si account_id fourni, vérifier qu'il existe
     account_info = None
     if account_id:
         acc_result = await db.execute(
@@ -360,13 +460,14 @@ async def preview_import(
                 "broker": acc.broker,
             }
 
-    # Stats rapides
     total = len(trades)
     detected_format = trades[0]["detected_format"] if trades else "unknown"
     symbols = list(set(t["symbol"] for t in trades if t["symbol"]))
     total_profit = sum(t["profit"] for t in trades)
     wins = sum(1 for t in trades if t["profit"] > 0)
     losses = sum(1 for t in trades if t["profit"] < 0)
+
+    logger.info(f"Import preview result: format={detected_format}, trades={total}, profit={total_profit:.2f}")
 
     return {
         "preview": True,
@@ -386,21 +487,17 @@ async def preview_import(
 
 
 # ───────────────────────────────────────────────────────────
-# POST /import/confirm  — Confirmer l'insertion des trades
+# POST /import/confirm
 # ───────────────────────────────────────────────────────────
 @router.post("/confirm")
 async def confirm_import(
     data: dict,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Confirme l'insertion des trades parsés.
-    Attend: { "trades": [...], "account_id": int }
-    Chaque trade doit avoir au minimum: symbol, open_time, direction.
-    """
-
     trades_data = data.get("trades", [])
     account_id = data.get("account_id")
+
+    logger.info(f"Import confirm: account_id={account_id}, trades={len(trades_data)}")
 
     if not trades_data:
         raise HTTPException(status_code=400, detail="No trades to import")
@@ -408,7 +505,6 @@ async def confirm_import(
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id is required")
 
-    # Vérifier que le compte existe
     acc_result = await db.execute(
         select(Account).where(Account.id == account_id)
     )
@@ -422,7 +518,6 @@ async def confirm_import(
 
     for idx, t in enumerate(trades_data):
         try:
-            # Champs requis
             symbol = t.get("symbol")
             open_time_str = t.get("open_time")
             direction = t.get("direction", "long")
@@ -434,7 +529,6 @@ async def confirm_import(
                 })
                 continue
 
-            # Parser open_time
             if isinstance(open_time_str, str):
                 open_time = _safe_datetime(open_time_str)
             elif isinstance(open_time_str, datetime):
@@ -449,7 +543,6 @@ async def confirm_import(
                 })
                 continue
 
-            # Parser close_time
             close_time = None
             close_time_str = t.get("close_time")
             if close_time_str:
@@ -458,11 +551,9 @@ async def confirm_import(
                 elif isinstance(close_time_str, datetime):
                     close_time = close_time_str
 
-            # Calculer is_winner
             profit = _safe_float(t.get("profit", 0))
             is_winner = 1 if profit > 0 else 0
 
-            # Calculer r_multiple si absent
             r_multiple = t.get("r_multiple")
             if r_multiple is None and profit != 0:
                 sl_price = _safe_float(t.get("sl_price", 0))
@@ -499,7 +590,10 @@ async def confirm_import(
             inserted += 1
 
         except Exception as e:
+            logger.error(f"Import error row {idx}: {e}", exc_info=True)
             errors.append({"row": idx, "error": str(e)})
+
+    logger.info(f"Import confirm done: inserted={inserted}, errors={len(errors)}")
 
     return {
         "message": f"Imported {inserted} trades",

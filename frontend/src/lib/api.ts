@@ -15,8 +15,18 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 500) {
-      console.error('[API] Server error:', error.response.data);
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const url = error.config?.url || 'unknown';
+      if (status && status >= 500) {
+        console.error(`[API] Server error ${status} on ${url}:`, error.response?.data);
+      } else if (status && status >= 400) {
+        console.warn(`[API] Client error ${status} on ${url}:`, error.response?.data);
+      } else if (!status) {
+        console.error(`[API] Network error on ${url}:`, error.message);
+      }
+    } else {
+      console.error('[API] Unexpected error:', error);
     }
     return Promise.reject(error);
   }

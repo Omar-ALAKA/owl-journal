@@ -1,20 +1,34 @@
 // routes/settings.tsx
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { rebuildEquity } from '../lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { rebuildEquity, fetchAccounts } from '../lib/api';
+import type { Account } from '../types';
 import { Settings, Database, RefreshCw, Check } from 'lucide-react';
 
 export function SettingsPage() {
   const qc = useQueryClient();
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildResult, setRebuildResult] = useState<string | null>(null);
+  const [rebuildAccountId, setRebuildAccountId] = useState<number>(0);
+
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => fetchAccounts().catch(() => ({ accounts: [] })),
+  });
+  const accounts: Account[] = accountsData?.accounts || [];
 
   const handleRebuild = async () => {
-    if (!confirm('Rebuild equity curve and daily stats for all accounts?')) return;
+    const target = rebuildAccountId === 0 ? 'all accounts' : (accounts.find(a => a.id === rebuildAccountId)?.name || `account ${rebuildAccountId}`);
+    if (!confirm(`Rebuild equity curve and daily stats for ${target}?`)) return;
     setRebuilding(true);
     try {
-      // Rebuild for account 1 as default
-      await rebuildEquity(1);
+      if (rebuildAccountId === 0) {
+        for (const account of accounts) {
+          await rebuildEquity(account.id);
+        }
+      } else {
+        await rebuildEquity(rebuildAccountId);
+      }
       qc.invalidateQueries({ queryKey: ['equity-curve'] });
       qc.invalidateQueries({ queryKey: ['journal-daily'] });
       setRebuildResult('Equity curve and daily stats rebuilt successfully!');
@@ -37,6 +51,19 @@ export function SettingsPage() {
         <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
           Rebuild equity curves and daily statistics from trade data. Useful after manual data changes.
         </p>
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <label className="form-label">Account to Rebuild</label>
+          <select
+            className="form-select"
+            value={rebuildAccountId}
+            onChange={e => setRebuildAccountId(Number(e.target.value))}
+          >
+            <option value={0}>All accounts</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name} ({a.broker || 'no broker'})</option>
+            ))}
+          </select>
+        </div>
         <button className="btn btn-secondary" onClick={handleRebuild} disabled={rebuilding}>
           <RefreshCw size={16} className={rebuilding ? 'spinner' : ''} /> {rebuilding ? 'Rebuilding...' : 'Rebuild Equity Data'}
         </button>

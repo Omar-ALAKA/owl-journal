@@ -1,7 +1,7 @@
 # app/api/v1/challenge.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case, and_
+from sqlalchemy import select, func, and_
 from typing import Optional
 from decimal import Decimal
 from app.database import get_db
@@ -53,17 +53,10 @@ async def get_current_challenge(
         cp_result = await db.execute(cp_query)
         last_checkpoint = cp_result.scalar_one_or_none()
 
-        # Stats trades du compte
+        # Stats trades du compte — fetch all trades and aggregate in Python
+        # (avoids SQLAlchemy func.case + asyncpg issues)
         trade_query = select(
-            func.count().label("total_trades"),
-            func.sum(case((Trade.profit > 0, 1), else_=0)).label("wins"),
-            func.sum(case((Trade.profit < 0, 1), else_=0)).label("losses"),
-            func.sum(Trade.profit).label("net_pnl"),
-            func.avg(Trade.profit).label("avg_pnl"),
-            func.max(Trade.profit).label("best_trade"),
-            func.min(Trade.profit).label("worst_trade"),
-            func.min(Trade.close_time).label("first_trade"),
-            func.max(Trade.close_time).label("last_trade"),
+            Trade.profit, Trade.open_time, Trade.close_time,
         ).where(
             and_(
                 Trade.account_id == acc.id,
@@ -71,7 +64,17 @@ async def get_current_challenge(
             )
         )
         trade_result = await db.execute(trade_query)
-        ts = trade_result.one()
+        trade_rows = trade_result.all()
+
+        total_trades = len(trade_rows)
+        wins = sum(1 for r in trade_rows if float(r[0] or 0) > 0)
+        losses = sum(1 for r in trade_rows if float(r[0] or 0) < 0)
+        net_pnl = sum(float(r[0] or 0) for r in trade_rows)
+        avg_pnl = net_pnl / total_trades if total_trades > 0 else 0
+        best_trade = max((float(r[0] or 0) for r in trade_rows), default=0)
+        worst_trade = min((float(r[0] or 0) for r in trade_rows), default=0)
+        first_trade = min((r[1] for r in trade_rows if r[1]), default=None)
+        last_trade = max((r[2] for r in trade_rows if r[2]), default=None)
 
         # Max drawdown personalisé
         all_trades_query = (
@@ -99,15 +102,24 @@ async def get_current_challenge(
                 max_dd = dd
 
         starting = float(acc.starting_balance or 0)
-        net_pnl = float(ts.net_pnl or 0)
-        current_equity = starting + net_pnl
+        net_pnl_val = net_pnl
+        current_equity = starting + net_pnl_val
         target = starting * (1 + float(acc.target_profit_pct or 10) / 100)
-        progress = (net_pnl / (target - starting) * 100) if target > starting else 0
+        progress = (net_pnl_val / (target - starting) * 100) if target > starting else 0
 
-        total_trades = ts.total_trades or 0
-        wins = ts.wins or 0
-        losses = ts.losses or 0
         win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+
+        # Calculer le nombre de jours de trading distincts
+        trading_days_query = select(
+            func.count(func.distinct(func.date(Trade.open_time))).label("trading_days")
+        ).where(
+            and_(
+                Trade.account_id == acc.id,
+                Trade.close_time.isnot(None),
+            )
+        )
+        trading_days_result = await db.execute(trading_days_query)
+        trading_days = trading_days_result.scalar() or 0
 
         max_drawdown_val = max_dd
         max_drawdown_pct = (max_dd / starting * 100) if starting > 0 else 0
@@ -132,9 +144,9 @@ async def get_current_challenge(
             "wins": wins,
             "losses": losses,
             "win_rate": round(win_rate, 2),
-            "avg_pnl": round(float(ts.avg_pnl or 0), 2),
-            "best_trade": round(float(ts.best_trade or 0), 2),
-            "worst_trade": round(float(ts.worst_trade or 0), 2),
+            "avg_pnl": round(avg_pnl, 2),
+            "best_trade": round(best_trade, 2),
+            "worst_trade": round(worst_trade, 2),
             "last_checkpoint": {
                 "type": last_checkpoint.checkpoint_type,
                 "balance": float(last_checkpoint.balance),
@@ -143,8 +155,11 @@ async def get_current_challenge(
                 "created_at": last_checkpoint.created_at.isoformat()
                 if last_checkpoint.created_at else None,
             } if last_checkpoint else None,
-            "first_trade_date": ts.first_trade.isoformat() if ts.first_trade else None,
-            "last_trade_date": ts.last_trade.isoformat() if ts.last_trade else None,
+            "first_trade_date": first_trade.isoformat() if first_trade else None,
+            "last_trade_date": last_trade.isoformat() if last_trade else None,
+            "trading_days": trading_days,
+            "min_trading_days": acc.min_trading_days or 0,
+            "trading_days_met": trading_days >= (acc.min_trading_days or 0),
             "created_at": acc.created_at.isoformat() if acc.created_at else None,
             "status": acc.status,
         })

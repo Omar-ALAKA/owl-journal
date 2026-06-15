@@ -1,4 +1,12 @@
 # app/main.py
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("owl_journal")
+
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +21,7 @@ import os
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    logger.info("OWL Journal V4 starting up")
     yield
     await close_pool()
 
@@ -38,7 +47,15 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
+    logger.info("Health check requested")
     return {"status": "healthy", "version": "4.0.0"}
+
+
+# Global exception handler for 500 errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
 
 # Serve frontend static files
@@ -61,6 +78,7 @@ async def spa_fallback(request: Request, exc: StarletteHTTPException):
 @app.get("/api/stats")
 async def stats_alias(account_id: int = None, db=Depends(get_db)):
     """Alias for /api/analytics/stats for frontend compatibility."""
+    logger.info(f"Stats requested: account_id={account_id}")
     from app.api.v1.analytics import get_stats
     return await get_stats(account_id=account_id, db=db)
 
@@ -68,10 +86,12 @@ async def stats_alias(account_id: int = None, db=Depends(get_db)):
 @app.post("/api/rebuild-equity/{account_id}")
 async def rebuild_equity(account_id: int, db=Depends(get_db)):
     """Rebuild equity curve and daily stats for an account."""
+    logger.info(f"Rebuild equity requested: account_id={account_id}")
     from app.services.rebuild import rebuild_equity_curve, rebuild_daily_stats
     curve_result = await rebuild_equity_curve(account_id, db)
     daily_result = await rebuild_daily_stats(account_id, db)
     await db.commit()
+    logger.info(f"Rebuild equity done: account_id={account_id}")
     return {"equity": curve_result, "daily": daily_result}
 
 
@@ -79,5 +99,6 @@ async def rebuild_equity(account_id: int, db=Depends(get_db)):
 @app.get("/api/strategies")
 async def strategies_alias(search: str = None, limit: int = 100, offset: int = 0, db=Depends(get_db)):
     """Alias for /api/strategies/custom for frontend compatibility."""
+    logger.info(f"Strategies requested: search={search}, limit={limit}, offset={offset}")
     from app.api.v1.strategies import list_strategies
     return await list_strategies(search=search, limit=limit, offset=offset, db=db)

@@ -19,6 +19,7 @@ class Account(Base):
     target_profit_pct = Column(Numeric(5, 2), default=10)
     max_drawdown_pct = Column(Numeric(5, 2), default=7)
     daily_loss_pct = Column(Numeric(5, 2), default=5)
+    min_trading_days = Column(Integer, default=0)  # 0 = pas de minimum
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

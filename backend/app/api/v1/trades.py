@@ -11,13 +11,18 @@ router = APIRouter(prefix="/trades", tags=["trades"])
 
 
 def trade_to_dict(t: Trade) -> dict:
-    """Convert Trade SQLAlchemy model to dict, handling datetime serialization."""
+    """Convert Trade SQLAlchemy model to dict, handling datetime and Decimal serialization."""
     d = {}
     for col in t.__table__.columns:
         val = getattr(t, col.name)
-        if val is not None and hasattr(val, 'isoformat'):
-            val = val.isoformat()
-        d[col.name] = val
+        if val is None:
+            d[col.name] = None
+        elif hasattr(val, "isoformat"):
+            d[col.name] = val.isoformat()
+        elif hasattr(val, "__float__"):
+            d[col.name] = float(val)
+        else:
+            d[col.name] = val
     return d
 
 

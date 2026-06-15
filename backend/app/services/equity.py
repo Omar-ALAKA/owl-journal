@@ -81,49 +81,43 @@ async def calculate_daily_stats(
     Returns a list of dicts with keys:
         date, net_pnl, trades, wins, losses
     """
-    # Aggregate trades by day
+    # Fetch closed trades and aggregate in Python (avoids SQLAlchemy func.case/asyncpg issues)
     trades_result = await db.execute(
-        select(
-            cast(Trade.close_time, Date).label("trade_date"),
-            func.count(Trade.id).label("total_trades"),
-            func.sum(Trade.profit + Trade.commission + Trade.swap).label("net_pnl"),
-            func.sum(
-                func.case((Trade.profit > 0, 1), else_=0)
-            ).label("wins"),
-            func.sum(
-                func.case((Trade.profit <= 0, 1), else_=0)
-            ).label("losses"),
-        )
+        select(Trade)
         .where(
             and_(
                 Trade.account_id == account_id,
                 Trade.close_time.isnot(None),
             )
         )
-        .group_by(cast(Trade.close_time, Date))
-        .order_by(cast(Trade.close_time, Date).asc())
+        .order_by(Trade.close_time.asc())
     )
-
-    rows = trades_result.all()
+    trades = trades_result.scalars().all()
 
     daily: list[dict[str, Any]] = []
-    for row in rows:
-        trade_date = row.trade_date
-        if isinstance(trade_date, str):
-            trade_date = date.fromisoformat(trade_date)
+    from collections import defaultdict
+    daily_agg: dict[str, dict[str, Any]] = {}
 
-        total_trades = row.total_trades or 0
-        wins = row.wins or 0
-        losses = row.losses or 0
-
-        daily.append(
-            {
-                "date": trade_date,
-                "net_pnl": float(row.net_pnl or 0),
-                "trades": total_trades,
-                "wins": wins,
-                "losses": losses,
+    for t in trades:
+        day_str = t.close_time.strftime("%Y-%m-%d")
+        if day_str not in daily_agg:
+            daily_agg[day_str] = {
+                "date": day_str, "net_pnl": 0.0, "trades": 0,
+                "wins": 0, "losses": 0,
             }
-        )
+        d = daily_agg[day_str]
+        d["trades"] += 1
+        pnl = float(t.profit or 0)
+        comm = float(t.commission or 0)
+        swp = float(t.swap or 0)
+        d["net_pnl"] += pnl + comm + swp
+        if pnl > 0:
+            d["wins"] += 1
+        elif pnl <= 0:
+            d["losses"] += 1
+
+    for day_str in sorted(daily_agg.keys()):
+        d = daily_agg[day_str]
+        daily.append(d)
 
     return daily

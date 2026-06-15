@@ -166,7 +166,7 @@ async def get_streaks(
 # ───────────────────────────────────────────────────────────
 @router.get("/equity")
 async def get_equity_curve(
-    view: str = Query("global", regex="^(global|challenge|percent)$"),
+    view: str = Query("global", pattern="^(global|challenge|percent)$"),
     account_id: Optional[int] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
