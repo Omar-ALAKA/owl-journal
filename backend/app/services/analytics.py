@@ -13,17 +13,31 @@ from app.models.account import Account
 from app.services.equity import calculate_equity_curve
 
 
-def detect_session(open_time: datetime) -> str:
+def detect_session(open_time: datetime, session_hours: dict | None = None) -> str:
     """Detect the trading session based on UTC hour of trade open_time.
 
-    Priority:
-      - Asia:        00:00 - 08:59 UTC
-      - London:      07:00 - 11:59 UTC (no overlap with NY)
-      - London/NY:   12:00 - 15:59 UTC (overlap)
-      - New York:    16:00 - 20:59 UTC (no overlap with London)
-      - Outside defined sessions -> returns "Other"
+    Uses custom session_hours if provided (from Account.session_hours JSON),
+    otherwise falls back to default hours.
+
+    session_hours format:
+    {
+      "Asia": {"start": 0, "end": 9},
+      "London": {"start": 9, "end": 12},
+      "London/NY": {"start": 12, "end": 16},
+      "New York": {"start": 16, "end": 21}
+    }
     """
-    hour = open_time.hour  # open_time is expected to be UTC
+    hour = open_time.hour
+
+    if session_hours:
+        for name, bounds in session_hours.items():
+            start = bounds.get("start", 0)
+            end = bounds.get("end", 24)
+            if start <= hour < end:
+                return name
+        return "Other"
+
+    # Default hours
     if 0 <= hour < 9:
         return "Asia"
     elif 9 <= hour < 12:
