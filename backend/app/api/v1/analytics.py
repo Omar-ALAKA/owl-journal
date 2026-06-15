@@ -435,7 +435,7 @@ async def get_r_distribution(
 
 
 # ───────────────────────────────────────────────────────────
-# GET /analytics/drawdown — Deep Drawdown Analysis
+# GET /analytics/drawdown — Deep Drawdown Analysis + Monte Carlo
 # ───────────────────────────────────────────────────────────
 
 @router.get("/drawdown")
@@ -445,9 +445,10 @@ async def get_drawdown_analysis(
     date_to: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Deep drawdown analysis: equity curve, peak tracking, drawdown periods."""
+    """Deep drawdown analysis with Monte Carlo recovery simulation."""
+    import random
 
-    # 1. Build query for closed trades with optional filters
+    # 1. Build query for closed trades
     query = select(Trade).where(Trade.close_time.isnot(None))
     if account_id:
         query = query.where(Trade.account_id == account_id)
@@ -472,30 +473,19 @@ async def get_drawdown_analysis(
 
     # If no trades → return zeros
     if not trades:
-        return {
-            "max_drawdown_pct": 0.0,
-            "max_drawdown_abs": 0.0,
-            "avg_drawdown_pct": 0.0,
-            "current_drawdown_pct": 0.0,
-            "nb_drawdown_periods": 0,
-            "longest_period_days": 0,
-            "drawdown_periods": [],
-            "underwater_curve": [],
-        }
+        return _empty_drawdown_response()
 
-    # 2. Build equity curve (starting from 0, cumulating PnL)
-    #    We use trade close_time as the timestamp
-    equity_curve = []  # [{timestamp, equity}, ...]
+    # 2. Build equity curve
+    equity_curve = []
     cumulative = 0.0
     for t in trades:
-        pnl = float(t.profit or 0)
-        cumulative += pnl
+        cumulative += float(t.profit or 0)
         equity_curve.append({
             "timestamp": t.close_time.isoformat() if t.close_time else None,
             "equity": round(cumulative, 2),
         })
 
-    # 3. Calculate running peak and drawdown
+    # 3. Running peak, drawdown, underwater curve
     peak = 0.0
     max_dd_pct = 0.0
     max_dd_abs = 0.0
@@ -524,79 +514,54 @@ async def get_drawdown_analysis(
     avg_dd_pct = round(dd_sum_pct / dd_count, 4) if dd_count > 0 else 0.0
     current_dd_pct = underwater_curve[-1]["drawdown_pct"] if underwater_curve else 0.0
 
-    # 4. Detect drawdown periods (continuous stretches where dd < 0)
-    drawdown_periods = []
-    in_drawdown = False
-    period_start = None
-    period_peak_dd_pct = 0.0
-    period_peak_dd_abs = 0.0
-
-    from datetime import date as date_type
-
-    for point in underwater_curve:
-        dd_pct = point["drawdown_pct"]
-        dd_abs = (point["equity"] - (point["equity"] - dd_pct / 100 * point["equity"])) if point["equity"] != 0 else 0
-
-        if dd_pct < 0 and not in_drawdown:
-            # Entering drawdown
-            in_drawdown = True
-            period_start = point["date"]
-            period_peak_dd_pct = dd_pct
-            period_peak_dd_abs = point["equity"] - (point["equity"] / (1 + dd_pct / 100)) if dd_pct != 0 else 0
-        elif dd_pct < 0 and in_drawdown:
-            # Still in drawdown → track deepest point
-            if dd_pct < period_peak_dd_pct:
-                period_peak_dd_pct = dd_pct
-                # Recalculate abs from pct
-                peak_at_point = point["equity"] / (1 + dd_pct / 100) if dd_pct > -100 else point["equity"]
-                period_peak_dd_abs = point["equity"] - peak_at_point
-        elif dd_pct >= 0 and in_drawdown:
-            # Exiting drawdown
-            in_drawdown = False
-            period_end = point["date"]
-            # Calculate duration
-            duration_days = 0
-            if period_start and period_end:
-                try:
-                    d_start = date_type.fromisoformat(period_start[:10])
-                    d_end = date_type.fromisoformat(period_end[:10])
-                    duration_days = (d_end - d_start).days
-                except (ValueError, TypeError):
-                    duration_days = 0
-            drawdown_periods.append({
-                "start": period_start[:10] if period_start else None,
-                "end": period_end[:10] if period_end else None,
-                "depth_abs": round(period_peak_dd_abs, 2),
-                "depth_pct": round(period_peak_dd_pct, 2),
-                "duration_days": duration_days,
-            })
-            period_start = None
-            period_peak_dd_pct = 0.0
-            period_peak_dd_abs = 0.0
-
-    # If still in drawdown at end of data
-    if in_drawdown and period_start:
-        period_end = underwater_curve[-1]["date"] if underwater_curve else period_start
-        duration_days = 0
-        if period_start and period_end:
-            try:
-                d_start = date_type.fromisoformat(period_start[:10])
-                d_end = date_type.fromisoformat(period_end[:10])
-                duration_days = (d_end - d_start).days
-            except (ValueError, TypeError):
-                duration_days = 0
-        drawdown_periods.append({
-            "start": period_start[:10] if period_start else None,
-            "end": period_end[:10] if period_end else None,
-            "depth_abs": round(period_peak_dd_abs, 2),
-            "depth_pct": round(period_peak_dd_pct, 2),
-            "duration_days": duration_days,
-        })
-
-    # 5. Find longest period
+    # 4. Detect drawdown periods
+    drawdown_periods = _detect_drawdown_periods(underwater_curve)
     longest_days = max((p["duration_days"] for p in drawdown_periods), default=0)
 
+    # 5. Compute trade stats for Monte Carlo
+    profits = [float(t.profit or 0) for t in trades]
+    wins = [p for p in profits if p > 0]
+    losses = [p for p in profits if p < 0]
+    win_rate = len(wins) / len(profits) if profits else 0.0
+    avg_win = sum(wins) / len(wins) if wins else 0.0
+    avg_loss = abs(sum(losses) / len(losses)) if losses else 0.0
+    ev_per_trade = (win_rate * avg_win) - ((1 - win_rate) * avg_loss)
+
+    # 6. Gain required to recover
+    current_equity = equity_curve[-1]["equity"] if equity_curve else 0.0
+    peak_equity = max(p["equity"] for p in equity_curve) if equity_curve else 0.0
+    dd_abs_current = current_equity - peak_equity
+    gain_required_pct = _gain_required_to_recover(abs(dd_abs_current), peak_equity)
+
+    # 7. Consecutive losses to breach limits
+    # Use avg_loss as reference; if no losses, use a small default
+    ref_loss = avg_loss if avg_loss > 0 else 100.0
+    # Overall DD limit: assume 10% of peak (prop firm standard)
+    overall_dd_limit_pct = 10.0
+    overall_dd_limit_abs = peak_equity * overall_dd_limit_pct / 100
+    remaining_dd_room = overall_dd_limit_abs - abs(dd_abs_current)
+    consec_losses_to_overall = int(remaining_dd_room / ref_loss) if ref_loss > 0 else 999
+
+    # Daily DD limit: assume 5% of peak
+    daily_dd_limit_pct = 5.0
+    daily_dd_limit_abs = peak_equity * daily_dd_limit_pct / 100
+    consec_losses_to_daily = int(daily_dd_limit_abs / ref_loss) if ref_loss > 0 else 999
+
+    # 8. Monte Carlo simulation (500 paths, max 3000 trades each)
+    mc_result = _monte_carlo_recovery(
+        win_rate=win_rate,
+        avg_win=avg_win,
+        avg_loss=avg_loss,
+        current_equity=current_equity,
+        peak_equity=peak_equity,
+        overall_dd_limit_abs=overall_dd_limit_abs,
+        daily_dd_limit_abs=daily_dd_limit_abs,
+        n_paths=500,
+        max_trades=3000,
+    )
+
     return {
+        # Basic drawdown metrics
         "max_drawdown_pct": round(max_dd_pct, 2),
         "max_drawdown_abs": round(max_dd_abs, 2),
         "avg_drawdown_pct": avg_dd_pct,
@@ -605,4 +570,180 @@ async def get_drawdown_analysis(
         "longest_period_days": longest_days,
         "drawdown_periods": drawdown_periods,
         "underwater_curve": underwater_curve,
+        # Recovery metrics
+        "current_equity": round(current_equity, 2),
+        "peak_equity": round(peak_equity, 2),
+        "gain_required_pct": round(gain_required_pct, 2),
+        "gain_required_abs": round(peak_equity - current_equity, 2),
+        # Trade stats
+        "win_rate": round(win_rate * 100, 1),
+        "avg_win": round(avg_win, 2),
+        "avg_loss": round(avg_loss, 2),
+        "ev_per_trade": round(ev_per_trade, 2),
+        "total_trades": len(profits),
+        # Consecutive losses to limits
+        "consec_losses_to_overall_limit": max(0, consec_losses_to_overall),
+        "consec_losses_to_daily_limit": max(0, consec_losses_to_daily),
+        "remaining_dd_room": round(max(0, remaining_dd_room), 2),
+        # Monte Carlo
+        "recovery_probability": mc_result["recovery_probability"],
+        "blowout_risk": mc_result["blowout_risk"],
+        "median_recovery_trades": mc_result["median_recovery_trades"],
+        "mean_recovery_trades": mc_result["mean_recovery_trades"],
+    }
+
+
+def _empty_drawdown_response():
+    return {
+        "max_drawdown_pct": 0.0, "max_drawdown_abs": 0.0,
+        "avg_drawdown_pct": 0.0, "current_drawdown_pct": 0.0,
+        "nb_drawdown_periods": 0, "longest_period_days": 0,
+        "drawdown_periods": [], "underwater_curve": [],
+        "current_equity": 0.0, "peak_equity": 0.0,
+        "gain_required_pct": 0.0, "gain_required_abs": 0.0,
+        "win_rate": 0.0, "avg_win": 0.0, "avg_loss": 0.0,
+        "ev_per_trade": 0.0, "total_trades": 0,
+        "consec_losses_to_overall_limit": 0,
+        "consec_losses_to_daily_limit": 0,
+        "remaining_dd_room": 0.0,
+        "recovery_probability": 0.0, "blowout_risk": 0.0,
+        "median_recovery_trades": 0, "mean_recovery_trades": 0,
+    }
+
+
+def _gain_required_to_recover(dd_abs: float, peak: float) -> float:
+    """Gain % required to recover from drawdown: 1/(1-dd_pct) - 1"""
+    if peak <= 0:
+        return 0.0
+    dd_pct = dd_abs / peak
+    if dd_pct >= 1.0:
+        return float("inf")
+    return (1.0 / (1.0 - dd_pct) - 1.0) * 100
+
+
+def _detect_drawdown_periods(underwater_curve: list) -> list:
+    """Detect continuous drawdown periods from underwater curve."""
+    from datetime import date as date_type
+    periods = []
+    in_dd = False
+    start = None
+    peak_dd_pct = 0.0
+    peak_dd_abs = 0.0
+
+    for point in underwater_curve:
+        dd_pct = point["drawdown_pct"]
+        if dd_pct < 0 and not in_dd:
+            in_dd = True
+            start = point["date"]
+            peak_dd_pct = dd_pct
+            peak_dd_abs = point["equity"] - (point["equity"] / (1 + dd_pct / 100)) if dd_pct > -100 and dd_pct != 0 else 0
+        elif dd_pct < 0 and in_dd:
+            if dd_pct < peak_dd_pct:
+                peak_dd_pct = dd_pct
+                peak_dd_abs = point["equity"] - (point["equity"] / (1 + dd_pct / 100)) if dd_pct > -100 else 0
+        elif dd_pct >= 0 and in_dd:
+            in_dd = False
+            end = point["date"]
+            dur = _calc_duration(start, end)
+            periods.append({"start": start[:10] if start else None, "end": end[:10] if end else None,
+                           "depth_abs": round(peak_dd_abs, 2), "depth_pct": round(peak_dd_pct, 2), "duration_days": dur})
+            start = None
+            peak_dd_pct = 0.0
+            peak_dd_abs = 0.0
+
+    if in_dd and start:
+        end = underwater_curve[-1]["date"] if underwater_curve else start
+        dur = _calc_duration(start, end)
+        periods.append({"start": start[:10] if start else None, "end": end[:10] if end else None,
+                       "depth_abs": round(peak_dd_abs, 2), "depth_pct": round(peak_dd_pct, 2), "duration_days": dur})
+    return periods
+
+
+def _calc_duration(start: str, end: str) -> int:
+    from datetime import date as date_type
+    try:
+        return (date_type.fromisoformat(end[:10]) - date_type.fromisoformat(start[:10])).days
+    except (ValueError, TypeError):
+        return 0
+
+
+def _monte_carlo_recovery(
+    win_rate: float, avg_win: float, avg_loss: float,
+    current_equity: float, peak_equity: float,
+    overall_dd_limit_abs: float, daily_dd_limit_abs: float,
+    n_paths: int = 500, max_trades: int = 3000,
+) -> dict:
+    """Run Monte Carlo simulation to estimate recovery probability."""
+    import random
+    random.seed(42)
+
+    if peak_equity <= 0 or current_equity <= 0:
+        return {"recovery_probability": 0.0, "blowout_risk": 100.0,
+                "median_recovery_trades": 0, "mean_recovery_trades": 0}
+
+    recovery_trades = []
+    blowouts = 0
+    timeouts = 0
+
+    for _ in range(n_paths):
+        equity = current_equity
+        peak = max(current_equity, peak_equity)
+        daily_start_equity = equity
+        consecutive_losses = 0
+
+        for trade_num in range(1, max_trades + 1):
+            # Simulate one trade
+            if random.random() < win_rate:
+                equity += avg_win
+                consecutive_losses = 0
+            else:
+                equity -= avg_loss
+                consecutive_losses += 1
+
+            # Update peak
+            if equity > peak:
+                peak = equity
+
+            # Check recovery
+            if equity >= peak_equity:
+                recovery_trades.append(trade_num)
+                break
+
+            # Check overall drawdown limit
+            overall_dd = peak - equity
+            if overall_dd >= overall_dd_limit_abs:
+                blowouts += 1
+                break
+
+            # Check daily drawdown limit (reset daily every ~20 trades as proxy)
+            daily_dd = daily_start_equity - equity
+            if daily_dd >= daily_dd_limit_abs:
+                blowouts += 1
+                break
+
+            # Reset daily equity every 20 trades
+            if trade_num % 20 == 0:
+                daily_start_equity = equity
+        else:
+            timeouts += 1
+
+    total = n_paths
+    n_recovered = len(recovery_trades)
+    recovery_prob = (n_recovered / total * 100) if total > 0 else 0.0
+    blowout_risk = ((blowouts + timeouts) / total * 100) if total > 0 else 100.0
+
+    if recovery_trades:
+        sorted_trades = sorted(recovery_trades)
+        mid = len(sorted_trades) // 2
+        median_trades = sorted_trades[mid] if len(sorted_trades) % 2 == 1 else (sorted_trades[mid - 1] + sorted_trades[mid]) / 2
+        mean_trades = sum(recovery_trades) / len(recovery_trades)
+    else:
+        median_trades = 0
+        mean_trades = 0
+
+    return {
+        "recovery_probability": round(recovery_prob, 1),
+        "blowout_risk": round(blowout_risk, 1),
+        "median_recovery_trades": int(median_trades),
+        "mean_recovery_trades": int(mean_trades),
     }
