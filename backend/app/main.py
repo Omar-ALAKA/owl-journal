@@ -95,10 +95,28 @@ async def rebuild_equity(account_id: int, db=Depends(get_db)):
     return {"equity": curve_result, "daily": daily_result}
 
 
-# ── Strategy alias ──────────────────────────────────────────
+# ── Strategy aliases ────────────────────────────────────────
 @app.get("/api/strategies")
 async def strategies_alias(search: str = None, limit: int = 100, offset: int = 0, db=Depends(get_db)):
     """Alias for /api/strategies/custom for frontend compatibility."""
     logger.info(f"Strategies requested: search={search}, limit={limit}, offset={offset}")
     from app.api.v1.strategies import list_strategies
     return await list_strategies(search=search, limit=limit, offset=offset, db=db)
+
+@app.post("/api/strategies")
+async def strategies_create(data: dict, db=Depends(get_db)):
+    """Alias for POST /api/strategies/custom for frontend compatibility."""
+    from app.api.v1.strategies import create_strategy
+    return await create_strategy(data=data, db=db)
+
+@app.put("/api/strategies/{strategy_id}")
+async def strategies_update(strategy_id: int, data: dict, db=Depends(get_db)):
+    """Alias for PUT /api/strategies/custom/{id} for frontend compatibility."""
+    from app.api.v1.strategies import update_strategy
+    return await update_strategy(strategy_id=strategy_id, data=data, db=db)
+
+@app.delete("/api/strategies/{strategy_id}")
+async def strategies_delete(strategy_id: int, db=Depends(get_db)):
+    """Alias for DELETE /api/strategies/custom/{id} for frontend compatibility."""
+    from app.api.v1.strategies import delete_strategy
+    return await delete_strategy(strategy_id=strategy_id, db=db)

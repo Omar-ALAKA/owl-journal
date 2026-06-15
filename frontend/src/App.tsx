@@ -14,6 +14,7 @@ import { AnalyticsPage } from './routes/analytics';
 import { AccountsPage } from './routes/accounts';
 import { ImportPage } from './routes/import';
 import { SettingsPage } from './routes/settings';
+import { SessionsPage } from './routes/sessions';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="/accounts" element={<AccountsPage />} />
                 <Route path="/import" element={<ImportPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/sessions" element={<SessionsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

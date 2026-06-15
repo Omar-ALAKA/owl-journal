@@ -6,10 +6,18 @@ import type {
   Checkpoint, Violation, JournalSession, StreakData, JournalDaily,
   CalendarMonth, HistoryAccount, Strategy, ImportPreview
 } from '../types';
+import { useTimezoneStore } from '../stores/timezone';
 
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
+});
+
+// Inject X-Timezone header on every request
+api.interceptors.request.use((config) => {
+  const tz = useTimezoneStore.getState().timezone || 'UTC';
+  config.headers['X-Timezone'] = tz;
+  return config;
 });
 
 api.interceptors.response.use(
@@ -168,3 +176,65 @@ export const confirmImport = (trades: Partial<Trade>[], accountId: number) =>
 // ── Rebuild ─────────────────────────────────────
 export const rebuildEquity = (accountId: number) =>
   post<unknown>(`/rebuild-equity/${accountId}`);
+
+// ── Timezone ─────────────────────────────────────
+export const fetchTimezoneInfo = (tz?: string) =>
+  get<{
+    tz_code: string;
+    tz_name: string;
+    offset_hours: number;
+    offset_formatted: string;
+    is_dst: boolean | null;
+    utc_now: string;
+    local_now: string;
+    current_session: string;
+    available_timezones: string[];
+  }>('/timezone/', tz ? { tz } : undefined);
+
+export const fetchTimezoneSessions = (tz?: string) =>
+  get<{
+    tz_code: string;
+    offset_hours: number;
+    sessions: Record<string, { local_start: number; local_end: number; utc_start: number; utc_end: number; description: string }>;
+    current_session: string;
+  }>('/timezone/sessions', tz ? { tz } : undefined);
+
+export const detectTimezone = () =>
+  get<{
+    detected_tz: string;
+    iana_name: string;
+    offset_hours: number;
+    offset_formatted: string;
+    is_dst: boolean;
+    dst_active: boolean;
+    dst_label: string;
+    note: string;
+  }>('/timezone/detect');
+
+// ── Drawdown Analysis ─────────────────────────────
+export const fetchDrawdownAnalysis = (accountId?: number, dateFrom?: string, dateTo?: string) => {
+  const params: Record<string, string | number> = {};
+  if (accountId) params.account_id = accountId;
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  return get<{
+    max_drawdown_pct: number;
+    max_drawdown_abs: number;
+    avg_drawdown_pct: number;
+    current_drawdown_pct: number;
+    nb_drawdown_periods: number;
+    longest_period_days: number;
+    drawdown_periods: Array<{
+      start: string;
+      end: string;
+      depth_abs: number;
+      depth_pct: number;
+      duration_days: number;
+    }>;
+    underwater_curve: Array<{
+      date: string;
+      equity: number;
+      drawdown_pct: number;
+    }>;
+  }>('/analytics/drawdown', Object.keys(params).length ? params : undefined);
+};

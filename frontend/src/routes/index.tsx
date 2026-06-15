@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchStats, fetchEquityCurve, fetchAccounts } from '../lib/api';
 import type { Stats, EquityPoint, Account } from '../types';
+import { sf, pnl, pct } from '../lib/safe';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell
@@ -60,42 +61,12 @@ export function DashboardPage() {
 
       {/* KPI Grid */}
       <div className="kpi-grid">
-        <KPICard
-          label="Net P&L"
-          value={`$${s.net_profit >= 0 ? '+' : ''}${s.net_profit.toFixed(2)}`}
-          color={s.net_profit >= 0 ? 'green' : 'red'}
-          icon={s.net_profit >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-        />
-        <KPICard
-          label="Profit Factor"
-          value={s.profit_factor === Infinity ? '∞' : s.profit_factor.toFixed(2)}
-          color={s.profit_factor >= 1.5 ? 'green' : s.profit_factor >= 1 ? 'accent' : 'red'}
-          icon={<Target size={18} />}
-        />
-        <KPICard
-          label="Win Rate"
-          value={`${s.win_rate.toFixed(1)}%`}
-          color={s.win_rate >= 50 ? 'green' : 'red'}
-          icon={<Activity size={18} />}
-          sub={`${s.wins}W / ${s.losses}L / ${s.breakeven}BE`}
-        />
-        <KPICard
-          label="Total Trades"
-          value={s.total_trades.toString()}
-          icon={<BarChart3 size={18} />}
-        />
-        <KPICard
-          label="Avg R-Multiple"
-          value={`${s.avg_r >= 0 ? '+' : ''}${s.avg_r.toFixed(2)}R`}
-          color={s.avg_r >= 0 ? 'green' : 'red'}
-          icon={<DollarSign size={18} />}
-        />
-        <KPICard
-          label="Max Drawdown"
-          value={`-$${s.max_drawdown.toFixed(2)}`}
-          color="red"
-          sub={`${s.max_drawdown_pct.toFixed(1)}%`}
-        />
+        <KPICard label="Net P&L" value={pnl(s.net_profit)} color={s.net_profit >= 0 ? 'green' : 'red'} icon={s.net_profit >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />} />
+        <KPICard label="Profit Factor" value={s.profit_factor === Infinity ? '∞' : sf(s.profit_factor)} color={s.profit_factor >= 1.5 ? 'green' : s.profit_factor >= 1 ? 'accent' : 'red'} icon={<Target size={18} />} />
+        <KPICard label="Win Rate" value={pct(s.win_rate)} color={s.win_rate >= 50 ? 'green' : 'red'} icon={<Activity size={18} />} sub={`${s.wins}W / ${s.losses}L / ${s.breakeven}BE`} />
+        <KPICard label="Total Trades" value={s.total_trades.toString()} icon={<BarChart3 size={18} />} />
+        <KPICard label="Avg R-Multiple" value={`${s.avg_r >= 0 ? '+' : ''}${sf(s.avg_r)}R`} color={s.avg_r >= 0 ? 'green' : 'red'} icon={<DollarSign size={18} />} />
+        <KPICard label="Max Drawdown" value={`-$${sf(s.max_drawdown)}`} color="red" sub={pct(s.max_drawdown_pct)} />
       </div>
 
       {/* Equity Curve */}
@@ -103,7 +74,7 @@ export function DashboardPage() {
         <div className="card">
           <div className="card-title">Equity Curve</div>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={equityPoints.map(p => ({ ...p, equity: +p.equity.toFixed(2) }))}>
+            <AreaChart data={equityPoints.map(p => ({ ...p, equity: Number(p.equity) || 0 }))}>
               <defs>
                 <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#E8A838" stopOpacity={0.3} />
@@ -132,7 +103,7 @@ export function DashboardPage() {
         <div className="card">
           <div className="card-title">Daily P&L</div>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={dailyPnL.map(d => ({ ...d, pnl: +d.pnl.toFixed(2) }))}>
+            <BarChart data={dailyPnL.map(d => ({ ...d, pnl: Number(d.pnl) || 0 }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis
                 dataKey="date"

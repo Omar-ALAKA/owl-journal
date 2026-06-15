@@ -25,5 +25,6 @@ class Tag(Base):
 class TradeTag(Base):
     __tablename__ = "trade_tags"
 
-    trade_id = Column(Integer, ForeignKey("trades.id", ondelete="CASCADE"), primary_key=True)
-    tag_id = Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_id = Column(Integer, ForeignKey("trades.id", ondelete="CASCADE"), nullable=False)
+    tag = Column(String(50), nullable=False)

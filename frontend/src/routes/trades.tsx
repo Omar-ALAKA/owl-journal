@@ -5,6 +5,23 @@ import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api
 import type { Trade, Account } from '../types';
 import { Trash2, Filter, X, Edit2 } from 'lucide-react';
 
+// Safe number formatter
+const fmt = (v: number | undefined | null, decimals = 2): string => {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  return Number(v).toFixed(decimals);
+};
+
+const fmtPnl = (v: number | undefined | null): string => {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  const n = Number(v);
+  return `${n >= 0 ? '+' : ''}$${n.toFixed(2)}`;
+};
+
+const fmtR = (v: number | undefined | null): string => {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  return `${Number(v).toFixed(2)}R`;
+};
+
 export function TradesPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(0);
@@ -48,6 +65,9 @@ export function TradesPage() {
       commission: t.commission,
       swap: t.swap,
       profit: t.profit,
+      rr_target: t.rr_target,
+      rr_actual: t.rr_actual,
+      r_multiple: t.r_multiple,
       session: t.session,
       setup: t.setup,
       notes: t.notes,
@@ -88,10 +108,10 @@ export function TradesPage() {
               <label className="form-label">Session</label>
               <select className="form-select" value={filters.session || ''} onChange={e => setFilters({ ...filters, session: e.target.value })}>
                 <option value="">All</option>
-                <option value="london">London</option>
-                <option value="newyork">New York</option>
-                <option value="asia">Asia</option>
-                <option value="overlap">Overlap</option>
+                <option value="Asia">Asia</option>
+                <option value="London">London</option>
+                <option value="New York">New York</option>
+                <option value="Late NY">Late NY</option>
               </select>
             </div>
             <div style={{ minWidth: '120px' }}>
@@ -127,8 +147,11 @@ export function TradesPage() {
                   <th>Volume</th>
                   <th>Entry</th>
                   <th>Exit</th>
+                  <th>SL</th>
+                  <th>TP</th>
                   <th>P&L</th>
-                  <th>R</th>
+                  <th>RR Target</th>
+                  <th>RR Actual</th>
                   <th>Session</th>
                   <th>Setup</th>
                   <th></th>
@@ -139,18 +162,25 @@ export function TradesPage() {
                   <tr key={t.id}>
                     <td style={{ whiteSpace: 'nowrap' }}>{t.open_time?.split('T')[0]}</td>
                     <td style={{ fontWeight: 600 }}>{t.symbol}</td>
-                    <td className={t.direction === 'long' ? 'text-green' : 'text-red'}>
-                      {t.direction === 'long' ? '▲' : '▼'}
+                    <td>
+                      <span style={{
+                        fontWeight: 700, fontSize: '11px', padding: '2px 6px', borderRadius: '3px',
+                        background: t.direction === 'long' ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
+                        color: t.direction === 'long' ? '#34D399' : '#F87171',
+                      }}>
+                        {t.direction === 'long' ? 'LONG' : t.direction === 'short' ? 'SHORT' : '-'}
+                      </span>
                     </td>
-                    <td>{t.volume}</td>
-                    <td>{t.entry_price}</td>
-                    <td>{t.exit_price || '-'}</td>
+                    <td>{fmt(t.volume, 2)}</td>
+                    <td>{fmt(t.entry_price, 4)}</td>
+                    <td>{fmt(t.exit_price, 4)}</td>
+                    <td>{fmt(t.sl_price, 4)}</td>
+                    <td>{fmt(t.tp_price, 4)}</td>
                     <td className={t.profit >= 0 ? 'text-green' : 'text-red'} style={{ fontWeight: 600 }}>
-                      {t.profit >= 0 ? '+' : ''}${typeof t.profit === 'number' ? t.profit.toFixed(2) : t.profit}
+                      {fmtPnl(t.profit)}
                     </td>
-                    <td className={(t.r_multiple || 0) >= 0 ? 'text-green' : 'text-red'}>
-                      {t.r_multiple ? `${t.r_multiple}R` : '-'}
-                    </td>
+                    <td className="text-muted">{fmtR(t.rr_target)}</td>
+                    <td className={(t.rr_actual || 0) >= 0 ? 'text-green' : 'text-red'}>{fmtR(t.rr_actual)}</td>
                     <td>{t.session ? <span className="badge badge-blue">{t.session}</span> : '-'}</td>
                     <td className="text-muted">{t.setup || '-'}</td>
                     <td>
@@ -165,7 +195,6 @@ export function TradesPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '20px' }}>
               <button className="btn btn-secondary btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</button>
@@ -231,25 +260,41 @@ export function TradesPage() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Commission</label>
-                <input className="form-input" type="number" step="0.01" value={editForm.commission ?? ''} onChange={e => setEditForm({ ...editForm, commission: parseFloat(e.target.value) || 0 })} />
+                <label className="form-label">RR Target</label>
+                <input className="form-input" type="number" step="0.1" value={editForm.rr_target ?? ''} onChange={e => setEditForm({ ...editForm, rr_target: parseFloat(e.target.value) || undefined })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Swap</label>
-                <input className="form-input" type="number" step="0.01" value={editForm.swap ?? ''} onChange={e => setEditForm({ ...editForm, swap: parseFloat(e.target.value) || 0 })} />
+                <label className="form-label">RR Actual</label>
+                <input className="form-input" type="number" step="0.1" value={editForm.rr_actual ?? ''} onChange={e => setEditForm({ ...editForm, rr_actual: parseFloat(e.target.value) || undefined })} />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
+                <label className="form-label">R Multiple</label>
+                <input className="form-input" type="number" step="0.1" value={editForm.r_multiple ?? ''} onChange={e => setEditForm({ ...editForm, r_multiple: parseFloat(e.target.value) || undefined })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Commission</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.commission ?? ''} onChange={e => setEditForm({ ...editForm, commission: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Swap</label>
+                <input className="form-input" type="number" step="0.01" value={editForm.swap ?? ''} onChange={e => setEditForm({ ...editForm, swap: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div className="form-group">
                 <label className="form-label">Session</label>
                 <select className="form-select" value={editForm.session || ''} onChange={e => setEditForm({ ...editForm, session: e.target.value })}>
                   <option value="">-</option>
-                  <option value="london">London</option>
-                  <option value="newyork">New York</option>
-                  <option value="asia">Asia</option>
-                  <option value="overlap">Overlap</option>
+                  <option value="Asia">Asia</option>
+                  <option value="London">London</option>
+                  <option value="New York">New York</option>
+                  <option value="Late NY">Late NY</option>
                 </select>
               </div>
+            </div>
+            <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Setup</label>
                 <input className="form-input" value={editForm.setup || ''} onChange={e => setEditForm({ ...editForm, setup: e.target.value })} />

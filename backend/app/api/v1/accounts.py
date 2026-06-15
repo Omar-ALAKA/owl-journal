@@ -8,19 +8,35 @@ from app.models.account import Account
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
+from sqlalchemy import inspect as sa_inspect
+
 def model_to_dict(obj):
-    """Convert SQLAlchemy model to dict, filtering internal attrs and serializing dates."""
+    """Convert SQLAlchemy model to dict, safely handling all column types."""
     d = {}
+    inspector = sa_inspect(obj.__class__)
     for col in obj.__table__.columns:
-        val = getattr(obj, col.name)
-        if val is None:
-            d[col.name] = None
-        elif hasattr(val, "isoformat"):
-            d[col.name] = val.isoformat()
-        elif hasattr(val, "__float__"):
-            d[col.name] = float(val)
-        else:
-            d[col.name] = val
+        col_name = col.name
+        try:
+            # Use getattr with a default to avoid lazy loading issues
+            val = getattr(obj, col_name, None)
+            if val is None:
+                d[col_name] = None
+            elif hasattr(val, "isoformat"):
+                d[col_name] = val.isoformat()
+            elif hasattr(val, "__float__"):
+                d[col_name] = float(val)
+            else:
+                d[col_name] = val
+        except Exception:
+            # If we can't read the value (expired, etc), try the identity map
+            try:
+                state = sa_inspect(obj)
+                if state.attrs[col_name].loaded_value is not None:
+                    d[col_name] = state.attrs[col_name].loaded_value
+                else:
+                    d[col_name] = None
+            except Exception:
+                d[col_name] = None
     return d
 
 
@@ -51,13 +67,32 @@ async def create_account(data: dict, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{account_id}")
 async def update_account(account_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    import logging, traceback
+    logger = logging.getLogger(__name__)
     result = await db.execute(select(Account).where(Account.id == account_id))
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
+    logger.info(f"Updating account {account_id} with keys: {list(data.keys())}")
     for key, value in data.items():
-        setattr(account, key, value)
-    await db.flush()
+        if value is None:
+            continue
+        if hasattr(account, key):
+            try:
+                setattr(account, key, value)
+            except Exception as e:
+                logger.error(f"Cannot set {key}={value!r}: {e}")
+                logger.error(traceback.format_exc())
+                continue
+        else:
+            logger.warning(f"Unknown field: {key}")
+    try:
+        await db.flush()
+    except Exception as e:
+        logger.error(f"DB flush error: {e}")
+        logger.error(traceback.format_exc())
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     return model_to_dict(account)
 
 

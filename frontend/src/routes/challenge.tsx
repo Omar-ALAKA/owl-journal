@@ -71,10 +71,18 @@ export function ChallengePage() {
           ) : challenges.map(c => (
             <div key={c.id}>
               {/* Progress bar */}
-              <div className="card">
+              <div className="card" style={{ borderLeft: c.challenge_complete ? '4px solid #34D399' : '4px solid transparent' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '18px' }}>{c.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {c.name}
+                      {c.challenge_complete && (
+                        <span style={{
+                          background: '#34D399', color: '#000', fontSize: '10px', fontWeight: 800,
+                          padding: '2px 8px', borderRadius: '4px', letterSpacing: '0.5px',
+                        }}>COMPLETED</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>{c.broker} · {c.phase}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -132,6 +140,18 @@ export function ChallengePage() {
                       <span className="text-green">+${c.best_trade.toFixed(2)}</span>
                       <span className="text-muted"> / </span>
                       <span className="text-red">${c.worst_trade.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '14px' }}>
+                    <div className="kpi-label">Target</div>
+                    <div className={`kpi-value ${c.target_reached ? 'green' : ''}`}>
+                      {c.target_reached ? 'Reached' : 'Pending'}
+                    </div>
+                  </div>
+                  <div className="kpi-card" style={{ padding: '14px' }}>
+                    <div className="kpi-label">Rules</div>
+                    <div className={`kpi-value ${c.rules_respected ? 'green' : 'red'}`}>
+                      {c.rules_respected ? 'Respected' : 'Violated'}
                     </div>
                   </div>
                 </div>

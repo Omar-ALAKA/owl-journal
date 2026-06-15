@@ -1,5 +1,5 @@
 # app/models/equity.py
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, Text, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -10,9 +10,14 @@ class EquityCurve(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     timestamp = Column(DateTime, nullable=False)
+    trade_date = Column(Date)
+    balance = Column(Numeric(12, 2), default=0)
     equity = Column(Numeric(12, 2), nullable=False)
     drawdown = Column(Numeric(12, 2), default=0)
     drawdown_pct = Column(Numeric(6, 2), default=0)
+    net_pnl = Column(Numeric(12, 2), default=0)
+    cumulative_pnl = Column(Numeric(12, 2), default=0)
+    trades_count = Column(Integer, default=0)
 
     account = relationship("Account", back_populates="equity_curve")
 
@@ -36,6 +41,21 @@ class DailyStats(Base):
     losing_trades = Column(Integer, default=0)
     win_rate = Column(Numeric(5, 2), default=0)
     profit_factor = Column(Numeric(6, 3), default=0)
+    avg_win = Column(Numeric(12, 2), default=0)
+    avg_loss = Column(Numeric(12, 2), default=0)
+    avg_rr_ratio = Column(Numeric(6, 2), default=0)
+    max_consecutive_wins = Column(Integer, default=0)
+    max_consecutive_losses = Column(Integer, default=0)
+    max_consecutive_pnl = Column(Numeric(12, 2), default=0)
+    day_drawdown = Column(Numeric(12, 2), default=0)
+    day_drawdown_pct = Column(Numeric(6, 2), default=0)
+    max_balance = Column(Numeric(12, 2), default=0)
+    min_balance = Column(Numeric(12, 2), default=0)
+    opening_balance = Column(Numeric(12, 2), default=0)
+    closing_balance = Column(Numeric(12, 2), default=0)
+    london_trades = Column(Integer, default=0)
+    ny_trades = Column(Integer, default=0)
+    other_trades = Column(Integer, default=0)
 
     account = relationship("Account", back_populates="daily_stats")
 

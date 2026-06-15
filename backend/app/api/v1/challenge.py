@@ -125,6 +125,30 @@ async def get_current_challenge(
         max_drawdown_pct = (max_dd / starting * 100) if starting > 0 else 0
         dd_limit = float(acc.max_drawdown_pct or 7)
 
+        # --- Challenge completion logic ---
+        target_reached = net_pnl_val >= (target - starting)
+        daily_loss_limit = float(acc.daily_loss_pct or 5)
+
+        # Check daily loss violations
+        daily_pnl_map: dict[str, float] = {}
+        for r in trade_rows:
+            day_key = r[1].strftime("%Y-%m-%d")
+            daily_pnl_map[day_key] = daily_pnl_map.get(day_key, 0) + float(r[0] or 0)
+        daily_loss_violations = 0
+        for day, day_pnl_val in daily_pnl_map.items():
+            if day_pnl_val < 0:
+                day_loss_pct = abs(day_pnl_val) / starting * 100 if starting > 0 else 0
+                if day_loss_pct > daily_loss_limit:
+                    daily_loss_violations += 1
+
+        trading_days_met = trading_days >= (acc.min_trading_days or 0)
+        rules_respected = (
+            max_drawdown_pct <= dd_limit
+            and daily_loss_violations == 0
+            and trading_days_met
+        )
+        challenge_complete = target_reached and rules_respected
+
         challenges.append({
             "id": acc.id,
             "name": acc.name,
@@ -159,7 +183,10 @@ async def get_current_challenge(
             "last_trade_date": last_trade.isoformat() if last_trade else None,
             "trading_days": trading_days,
             "min_trading_days": acc.min_trading_days or 0,
-            "trading_days_met": trading_days >= (acc.min_trading_days or 0),
+            "trading_days_met": trading_days_met,
+            "challenge_complete": challenge_complete,
+            "target_reached": target_reached,
+            "rules_respected": rules_respected,
             "created_at": acc.created_at.isoformat() if acc.created_at else None,
             "status": acc.status,
         })

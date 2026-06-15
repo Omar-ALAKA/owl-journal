@@ -432,3 +432,177 @@ async def get_r_distribution(
             "max_r": round(max_r, 2),
         },
     }
+
+
+# ───────────────────────────────────────────────────────────
+# GET /analytics/drawdown — Deep Drawdown Analysis
+# ───────────────────────────────────────────────────────────
+
+@router.get("/drawdown")
+async def get_drawdown_analysis(
+    account_id: Optional[int] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Deep drawdown analysis: equity curve, peak tracking, drawdown periods."""
+
+    # 1. Build query for closed trades with optional filters
+    query = select(Trade).where(Trade.close_time.isnot(None))
+    if account_id:
+        query = query.where(Trade.account_id == account_id)
+    if date_from:
+        from datetime import datetime
+        try:
+            df = datetime.fromisoformat(date_from)
+            query = query.where(Trade.close_time >= df)
+        except ValueError:
+            pass
+    if date_to:
+        from datetime import datetime
+        try:
+            dt = datetime.fromisoformat(date_to)
+            query = query.where(Trade.close_time <= dt)
+        except ValueError:
+            pass
+
+    query = query.order_by(Trade.close_time.asc())
+    result = await db.execute(query)
+    trades = result.scalars().all()
+
+    # If no trades → return zeros
+    if not trades:
+        return {
+            "max_drawdown_pct": 0.0,
+            "max_drawdown_abs": 0.0,
+            "avg_drawdown_pct": 0.0,
+            "current_drawdown_pct": 0.0,
+            "nb_drawdown_periods": 0,
+            "longest_period_days": 0,
+            "drawdown_periods": [],
+            "underwater_curve": [],
+        }
+
+    # 2. Build equity curve (starting from 0, cumulating PnL)
+    #    We use trade close_time as the timestamp
+    equity_curve = []  # [{timestamp, equity}, ...]
+    cumulative = 0.0
+    for t in trades:
+        pnl = float(t.profit or 0)
+        cumulative += pnl
+        equity_curve.append({
+            "timestamp": t.close_time.isoformat() if t.close_time else None,
+            "equity": round(cumulative, 2),
+        })
+
+    # 3. Calculate running peak and drawdown
+    peak = 0.0
+    max_dd_pct = 0.0
+    max_dd_abs = 0.0
+    dd_sum_pct = 0.0
+    dd_count = 0
+    underwater_curve = []
+
+    for point in equity_curve:
+        eq = point["equity"]
+        if eq > peak:
+            peak = eq
+        dd_abs = eq - peak
+        dd_pct = (dd_abs / peak * 100) if peak > 0 else 0.0
+        if dd_pct < 0:
+            dd_sum_pct += dd_pct
+            dd_count += 1
+        if dd_pct < max_dd_pct:
+            max_dd_pct = dd_pct
+            max_dd_abs = dd_abs
+        underwater_curve.append({
+            "date": point["timestamp"],
+            "equity": point["equity"],
+            "drawdown_pct": round(dd_pct, 4),
+        })
+
+    avg_dd_pct = round(dd_sum_pct / dd_count, 4) if dd_count > 0 else 0.0
+    current_dd_pct = underwater_curve[-1]["drawdown_pct"] if underwater_curve else 0.0
+
+    # 4. Detect drawdown periods (continuous stretches where dd < 0)
+    drawdown_periods = []
+    in_drawdown = False
+    period_start = None
+    period_peak_dd_pct = 0.0
+    period_peak_dd_abs = 0.0
+
+    from datetime import date as date_type
+
+    for point in underwater_curve:
+        dd_pct = point["drawdown_pct"]
+        dd_abs = (point["equity"] - (point["equity"] - dd_pct / 100 * point["equity"])) if point["equity"] != 0 else 0
+
+        if dd_pct < 0 and not in_drawdown:
+            # Entering drawdown
+            in_drawdown = True
+            period_start = point["date"]
+            period_peak_dd_pct = dd_pct
+            period_peak_dd_abs = point["equity"] - (point["equity"] / (1 + dd_pct / 100)) if dd_pct != 0 else 0
+        elif dd_pct < 0 and in_drawdown:
+            # Still in drawdown → track deepest point
+            if dd_pct < period_peak_dd_pct:
+                period_peak_dd_pct = dd_pct
+                # Recalculate abs from pct
+                peak_at_point = point["equity"] / (1 + dd_pct / 100) if dd_pct > -100 else point["equity"]
+                period_peak_dd_abs = point["equity"] - peak_at_point
+        elif dd_pct >= 0 and in_drawdown:
+            # Exiting drawdown
+            in_drawdown = False
+            period_end = point["date"]
+            # Calculate duration
+            duration_days = 0
+            if period_start and period_end:
+                try:
+                    d_start = date_type.fromisoformat(period_start[:10])
+                    d_end = date_type.fromisoformat(period_end[:10])
+                    duration_days = (d_end - d_start).days
+                except (ValueError, TypeError):
+                    duration_days = 0
+            drawdown_periods.append({
+                "start": period_start[:10] if period_start else None,
+                "end": period_end[:10] if period_end else None,
+                "depth_abs": round(period_peak_dd_abs, 2),
+                "depth_pct": round(period_peak_dd_pct, 2),
+                "duration_days": duration_days,
+            })
+            period_start = None
+            period_peak_dd_pct = 0.0
+            period_peak_dd_abs = 0.0
+
+    # If still in drawdown at end of data
+    if in_drawdown and period_start:
+        period_end = underwater_curve[-1]["date"] if underwater_curve else period_start
+        duration_days = 0
+        if period_start and period_end:
+            try:
+                d_start = date_type.fromisoformat(period_start[:10])
+                d_end = date_type.fromisoformat(period_end[:10])
+                duration_days = (d_end - d_start).days
+            except (ValueError, TypeError):
+                duration_days = 0
+        drawdown_periods.append({
+            "start": period_start[:10] if period_start else None,
+            "end": period_end[:10] if period_end else None,
+            "depth_abs": round(period_peak_dd_abs, 2),
+            "depth_pct": round(period_peak_dd_pct, 2),
+            "duration_days": duration_days,
+        })
+
+    # 5. Find longest period
+    longest_days = max((p["duration_days"] for p in drawdown_periods), default=0)
+
+    return {
+        "max_drawdown_pct": round(max_dd_pct, 2),
+        "max_drawdown_abs": round(max_dd_abs, 2),
+        "avg_drawdown_pct": avg_dd_pct,
+        "current_drawdown_pct": round(current_dd_pct, 2),
+        "nb_drawdown_periods": len(drawdown_periods),
+        "longest_period_days": longest_days,
+        "drawdown_periods": drawdown_periods,
+        "underwater_curve": underwater_curve,
+    }

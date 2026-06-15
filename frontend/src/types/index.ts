@@ -33,15 +33,22 @@ export interface Account {
   name: string;
   broker?: string;
   broker_acct?: string;
+  account_number?: string;
+  platform?: string;
   account_type: 'challenge' | 'funded' | 'personal';
+  challenge_type?: string;
   phase?: string;
+  currency?: string;
   status: string;
+  is_active?: boolean;
   starting_balance: number;
   current_balance: number;
   target_profit_pct: number;
   max_drawdown_pct: number;
   daily_loss_pct: number;
   min_trading_days?: number;
+  session_hours?: string;
+  rules?: Record<string, unknown>;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -175,6 +182,12 @@ export interface ChallengeData {
   last_checkpoint?: Checkpoint;
   first_trade_date?: string;
   last_trade_date?: string;
+  trading_days?: number;
+  min_trading_days?: number;
+  trading_days_met?: boolean;
+  challenge_complete: boolean;
+  target_reached: boolean;
+  rules_respected: boolean;
   created_at?: string;
   status: string;
 }

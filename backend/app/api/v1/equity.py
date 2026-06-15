@@ -118,8 +118,8 @@ async def get_daily_equity(
                 "gross_profit": float(r.gross_profit or 0),
                 "gross_loss": float(r.gross_loss or 0),
                 "total_trades": r.total_trades or 0,
-                "wins": r.wins or 0,
-                "losses": r.losses or 0,
+                "wins": r.winning_trades or 0,
+                "losses": r.losing_trades or 0,
                 "win_rate": float(r.win_rate or 0),
                 "profit_factor": float(r.profit_factor or 0),
             }

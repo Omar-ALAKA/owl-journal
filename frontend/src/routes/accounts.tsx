@@ -76,8 +76,8 @@ export function AccountsPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px' }}>${a.current_balance.toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>from ${a.starting_balance.toFixed(2)}</div>
+                  <div style={{ fontWeight: 700, fontSize: '14px' }}>${(a.current_balance ?? 0).toFixed(2)}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>from ${(a.starting_balance ?? 0).toFixed(2)}</div>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => openEdit(a)}><Edit2 size={14} /></button>
                 <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}><Trash2 size={14} /></button>

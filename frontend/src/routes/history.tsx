@@ -27,7 +27,7 @@ export function HistoryPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <Trophy size={16} color="var(--color-accent)" />
                     <span style={{ fontWeight: 700, fontSize: '16px' }}>{a.name}</span>
-                    <span className={`badge ${a.status === 'active' ? 'badge-green' : 'badge-red'}`}>{a.status}</span>
+                    <span className={`badge ${a.status === 'validated' ? 'badge-green' : a.status === 'active' ? 'badge-orange' : 'badge-red'}`}>{a.status}</span>
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
                     {a.broker || 'No broker'} · {a.account_type} {a.phase ? `· ${a.phase}` : ''}

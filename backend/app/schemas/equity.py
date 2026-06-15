@@ -37,8 +37,8 @@ class DailyStatsBase(BaseModel):
     gross_profit: float = 0
     gross_loss: float = 0
     total_trades: int = 0
-    wins: int = 0
-    losses: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
     win_rate: float = 0
     profit_factor: float = 0
 

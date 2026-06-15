@@ -7,6 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell
 } from 'recharts';
+import { sf, pnl, pct, rfmt, cur } from '../lib/safe';
 import { TrendingUp, TrendingDown, Flame, Snowflake, CheckCircle, XCircle } from 'lucide-react';
 
 export function JournalPage() {
@@ -68,7 +69,7 @@ export function JournalPage() {
           <div className="card">
             <div className="card-title">Equity Curve</div>
             <ResponsiveContainer width="100%" height={350}>
-              <AreaChart data={equityPoints.map(p => ({ ...p, equity: +p.equity.toFixed(2) }))}>
+              <AreaChart data={equityPoints.map(p => ({ ...p, equity: Number(p.equity) || 0 }))}>
                 <defs>
                   <linearGradient id="eqGrad2" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#E8A838" stopOpacity={0.3} />
@@ -96,13 +97,13 @@ export function JournalPage() {
                   <td style={{ fontWeight: 600, textTransform: 'capitalize' }}>{s.session}</td>
                   <td>{s.total_trades}</td>
                   <td>{s.wins}/{s.losses}</td>
-                  <td>{s.win_rate}%</td>
-                  <td className={s.net_profit >= 0 ? 'text-green' : 'text-red'}>{s.net_profit >= 0 ? '+' : ''}${s.net_profit.toFixed(2)}</td>
-                  <td>${s.avg_pnl.toFixed(2)}</td>
-                  <td className={s.avg_r_multiple >= 0 ? 'text-green' : 'text-red'}>{s.avg_r_multiple}R</td>
-                  <td className="text-green">${s.best_trade.toFixed(2)}</td>
-                  <td className="text-red">${s.worst_trade.toFixed(2)}</td>
-                  <td className="text-muted">${(s.total_commission + s.total_swap).toFixed(2)}</td>
+                  <td>{pct(s.win_rate)}</td>
+                  <td className={s.net_profit >= 0 ? 'text-green' : 'text-red'}>{pnl(s.net_profit)}</td>
+                  <td>{cur(s.avg_pnl)}</td>
+                  <td className={s.avg_r_multiple >= 0 ? 'text-green' : 'text-red'}>{rfmt(s.avg_r_multiple)}</td>
+                  <td className="text-green">{cur(s.best_trade)}</td>
+                  <td className="text-red">{cur(s.worst_trade)}</td>
+                  <td className="text-muted">{cur((s.total_commission ?? 0) + (s.total_swap ?? 0))}</td>
                 </tr>
               ))}
             </tbody>
@@ -154,9 +155,9 @@ export function JournalPage() {
                   <td>{d.total_trades}</td>
                   <td>{d.wins}/{d.losses}</td>
                   <td>{d.win_rate}%</td>
-                  <td className={d.net_pnl >= 0 ? 'text-green' : 'text-red'}>{d.net_pnl >= 0 ? '+' : ''}${d.net_pnl.toFixed(2)}</td>
-                  <td className="text-green">${d.gross_profit.toFixed(2)}</td>
-                  <td className="text-red">${d.gross_loss.toFixed(2)}</td>
+                  <td className={d.net_pnl >= 0 ? 'text-green' : 'text-red'}>{pnl(d.net_pnl)}</td>
+                  <td className="text-green">{cur(d.gross_profit)}</td>
+                  <td className="text-red">{cur(d.gross_loss)}</td>
                   <td>{d.profit_factor}</td>
                 </tr>
               ))}
@@ -177,7 +178,7 @@ export function JournalPage() {
                 <div className="kpi-label">Status</div>
                 <div className="kpi-value">
                   <span className={`badge ${challengeStatus.challenge_complete ? 'badge-green' : 'badge-orange'}`}>
-                    {challengeStatus.challenge_complete ? 'COMPLETED' : 'IN PROGRESS'}
+                    {challengeStatus.challenge_complete ? 'VALIDATED' : 'IN PROGRESS'}
                   </span>
                 </div>
               </div>
@@ -218,13 +219,13 @@ export function JournalPage() {
               <div className="kpi-card">
                 <div className="kpi-label">Progress</div>
                 <div className="kpi-value">
-                  {challengeStatus.progress_pct >= 0 ? '+' : ''}{challengeStatus.progress_pct.toFixed(2)}% / {challengeStatus.target_amount >= 0 ? '+' : ''}{((challengeStatus.net_pnl / (challengeStatus.target_amount || 1)) * 100).toFixed(0)}%
+                  {sf(challengeStatus.progress_pct)}% / {sf((challengeStatus.net_pnl / (challengeStatus.target_amount || 1)) * 100, 0)}%
                 </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-label">Max Drawdown</div>
                 <div className="kpi-value">
-                  {challengeStatus.max_drawdown_pct.toFixed(2)}% / {challengeStatus.drawdown_limit_pct}%
+                  {sf(challengeStatus.max_drawdown_pct)}% / {challengeStatus.drawdown_limit_pct}%
                 </div>
               </div>
             </div>
@@ -238,7 +239,7 @@ export function JournalPage() {
                     {challengeStatus.violations.map((v, i) => (
                       <tr key={i}>
                         <td style={{ fontWeight: 600 }}>{v.type.replace(/_/g, ' ')}</td>
-                        <td className="text-red">{v.value.toFixed(2)}</td>
+                        <td className="text-red">{sf(v.value)}</td>
                         <td>{v.limit}</td>
                         <td><span className={`badge ${v.severity === 'critical' ? 'badge-red' : 'badge-orange'}`}>{v.severity}</span></td>
                         <td className="text-muted">{v.date || '-'}</td>

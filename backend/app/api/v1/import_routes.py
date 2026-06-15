@@ -292,6 +292,13 @@ def _parse_csv_content(content: str) -> list[dict]:
         notes = get("notes")
         ticket = get("ticket")
 
+        # Auto-detect session from open_time using request timezone
+        if not session and open_time:
+            from app.middleware.timezone_middleware import get_request_offset
+            from app.services.timezone import get_session_for_time
+            offset = get_request_offset(open_time)
+            session = get_session_for_time(open_time, offset)
+
         if not direction and profit != 0:
             direction = "long" if profit > 0 else "short"
 
@@ -429,6 +436,13 @@ def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
             setup = get("setup")
             notes = get("notes")
             ticket = get("ticket")
+
+            # Auto-detect session from open_time using request timezone
+            if not session and open_time:
+                from app.middleware.timezone_middleware import get_request_offset
+                from app.services.timezone import get_session_for_time
+                offset = get_request_offset(open_time)
+                session = get_session_for_time(open_time, offset)
 
             if not direction and profit != 0:
                 direction = "long" if profit > 0 else "short"

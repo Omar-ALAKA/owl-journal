@@ -161,8 +161,8 @@ async def rebuild_daily_stats(
             gross_profit=round(gross_profit, 2),
             gross_loss=round(gross_loss, 2),
             total_trades=total,
-            wins=wins,
-            losses=d["losses"],
+            winning_trades=wins,
+            losing_trades=d["losses"],
             win_rate=win_rate,
             profit_factor=profit_factor,
         )
