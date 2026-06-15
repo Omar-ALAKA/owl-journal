@@ -104,7 +104,7 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
         </div>
 
         <div className="kpi-card">
-          <div className="kpi-label"><BarChart3 size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Current Drawdown</div>
+          <div className="kpi-label"><Activity size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Current Drawdown</div>
           <div className={`kpi-value ${current_drawdown_pct < -20 ? 'red' : current_drawdown_pct < -10 ? 'yellow' : 'green'}`}>
             {pct(current_drawdown_pct, 2)}
           </div>
