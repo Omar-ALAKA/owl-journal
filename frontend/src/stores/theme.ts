@@ -1,3 +1,4 @@
+// stores/theme.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -10,14 +11,14 @@ interface ThemeState {
 
 export const useThemeStore = create<ThemeState>()(
   persist(
-    (set) => ({
-      theme: 'light',
-      toggle: () =>
-        set((state) => {
-          const newTheme = state.theme === 'dark' ? 'light' : 'dark';
-          document.documentElement.setAttribute('data-theme', newTheme);
-          return { theme: newTheme };
-        }),
+    (set, get) => ({
+      theme: (localStorage.getItem('owl-theme') as Theme) || 'dark',
+      toggle: () => {
+        const next = get().theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('owl-theme', next);
+        set({ theme: next });
+      },
     }),
     { name: 'owl-theme' }
   )
