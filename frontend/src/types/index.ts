@@ -136,17 +136,17 @@ export interface RSummary {
 }
 
 export interface ChallengeStatus {
-  account_id: number;
-  account_name: string;
-  status: string;
+  challenge_complete: boolean;
   target_reached: boolean;
   rules_respected: boolean;
-  trading_days: number;
-  min_trading_days: number;
-  target_profit_pct: number;
-  net_pnl_pct: number;
+  net_pnl: number;
+  target_amount: number;
+  progress_pct: number;
   max_drawdown_pct: number;
   drawdown_limit_pct: number;
+  trading_days: number;
+  min_trading_days: number;
+  trading_days_met: boolean;
   violations: { type: string; value: number; limit: number; severity: string; date?: string }[];
 }
 

@@ -176,8 +176,8 @@ export function JournalPage() {
               <div className="kpi-card">
                 <div className="kpi-label">Status</div>
                 <div className="kpi-value">
-                  <span className={`badge ${challengeStatus.status === 'completed' ? 'badge-green' : 'badge-orange'}`}>
-                    {challengeStatus.status === 'completed' ? 'COMPLETED' : 'IN PROGRESS'}
+                  <span className={`badge ${challengeStatus.challenge_complete ? 'badge-green' : 'badge-orange'}`}>
+                    {challengeStatus.challenge_complete ? 'COMPLETED' : 'IN PROGRESS'}
                   </span>
                 </div>
               </div>
@@ -218,7 +218,7 @@ export function JournalPage() {
               <div className="kpi-card">
                 <div className="kpi-label">Progress</div>
                 <div className="kpi-value">
-                  {challengeStatus.net_pnl_pct >= 0 ? '+' : ''}{challengeStatus.net_pnl_pct.toFixed(2)}% / {challengeStatus.target_profit_pct}%
+                  {challengeStatus.progress_pct >= 0 ? '+' : ''}{challengeStatus.progress_pct.toFixed(2)}% / {challengeStatus.target_amount >= 0 ? '+' : ''}{((challengeStatus.net_pnl / (challengeStatus.target_amount || 1)) * 100).toFixed(0)}%
                 </div>
               </div>
               <div className="kpi-card">

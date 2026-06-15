@@ -5,7 +5,6 @@ from typing import Optional
 from app.database import get_db
 from app.models.trade import Trade
 from app.schemas.trade import TradeCreate, TradeUpdate
-from app.services.analytics import detect_session
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -52,15 +51,6 @@ async def list_trades(
     query = query.order_by(Trade.open_time.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
     trades = result.scalars().all()
-
-    # Auto-assign sessions to trades that don't have one
-    updated = False
-    for t in trades:
-        if not t.session and t.open_time:
-            t.session = detect_session(t.open_time)
-            updated = True
-    if updated:
-        await db.flush()
 
     return {
         "trades": [trade_to_dict(t) for t in trades],
