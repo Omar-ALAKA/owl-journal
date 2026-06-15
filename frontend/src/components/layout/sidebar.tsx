@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Trophy, BookOpen, Clock, Calendar,
   ArrowLeftRight, BarChart3, Target, CreditCard, Upload,
-  Moon, Sun, TrendingDown,
+  Moon, Sun, TrendingDown, Zap,
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/theme';
 import { useTimezoneStore, getTimezoneOffset, getEffectiveTzName, getCurrentSession, formatOffset } from '@/stores/timezone';
@@ -26,17 +26,17 @@ const navItems = [
 ];
 
 const SESSION_COLORS: Record<string, string> = {
-  'Asia': '#E8A838',
+  'Asia': '#FBBF24',
   'London': '#60A5FA',
   'New York': '#34D399',
-  'Late NY': '#FBBF24',
+  'Late NY': '#FB923C',
   'Off-hours': '#4A5266',
 };
 
-function getDdColor(pct: number): string {
-  const abs = Math.abs(pct);
-  if (abs <= 2.5) return '#34D399';
-  if (abs <= 5) return '#FBBF24';
+function ddColor(pct: number): string {
+  const a = Math.abs(pct);
+  if (a <= 2.5) return '#34D399';
+  if (a <= 5) return '#FBBF24';
   return '#F87171';
 }
 
@@ -46,99 +46,82 @@ export function Sidebar() {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 15000);
-    return () => clearInterval(interval);
+    const i = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(i);
   }, []);
 
   const offset = getTimezoneOffset(timezone, now);
   const tzName = getEffectiveTzName(timezone, now);
-  const currentSession = getCurrentSession(offset);
-  const sessionColor = SESSION_COLORS[currentSession] || '#4A5266';
+  const sess = getCurrentSession(offset);
+  const sessColor = SESSION_COLORS[sess] || '#4A5266';
   const localTime = new Date(now.getTime() + offset * 3600000);
   const timeStr = localTime.toISOString().slice(11, 16);
 
-  const { data: ddData } = useQuery({
-    queryKey: ['sidebar-drawdown'],
+  const { data: dd } = useQuery({
+    queryKey: ['sb-dd'],
     queryFn: () => fetchDrawdownAnalysis().catch(() => null),
     refetchInterval: 30000,
     staleTime: 20000,
   });
 
-  const currentDdPct = ddData?.current_drawdown_pct ?? 0;
-  const maxDdPct = ddData?.max_drawdown_pct ?? 0;
-  const ddColor = getDdColor(currentDdPct);
-  const thermWidth = Math.min((Math.abs(currentDdPct) / 7) * 100, 100);
+  const curDd = dd?.current_drawdown_pct ?? 0;
+  const maxDd = dd?.max_drawdown_pct ?? 0;
+  const ddCol = ddColor(curDd);
+  const thermW = Math.min((Math.abs(curDd) / 7) * 100, 100);
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="sidebar-brand">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 22h20" />
-            <path d="M8 22v-6a2 2 0 0 1 4 0v6" />
-            <path d="M2 15c0-5 1-10 4-13 3 3 4 8 4 13" />
-            <path d="M18 15c0-5 1-10 4-13 3 3 4 8 4 13" />
-            <path d="M12 11v11" />
-          </svg>
-          <span className="sidebar-brand-text">OWL Journal</span>
+      {/* Logo */}
+      <div className="sidebar-logo">
+        <div className="sidebar-logo-icon">
+          <Zap size={18} color="#fff" />
         </div>
+        <span className="sidebar-logo-text">OWL Journal</span>
       </div>
 
-      {/* ── Session / Timezone ── */}
-      <div className="session-panel">
-        <div className="session-tz">
-          <span>{tzName} {formatOffset(offset)}</span>
-          <span className="session-time">{timeStr}</span>
-        </div>
-        <div className="session-badge">
-          <div className="session-dot" style={{ background: sessionColor, boxShadow: `0 0 8px ${sessionColor}` }} />
-          <span style={{ fontSize: '12px', fontWeight: 700, color: sessionColor }}>
-            {currentSession}
-          </span>
-          <span className="session-live" style={{ color: currentSession !== 'Off-hours' ? 'var(--color-pos)' : 'var(--color-text-dim)' }}>
-            {currentSession !== 'Off-hours' ? '● Live' : '○ Off'}
+      {/* Session */}
+      <div className="session-card">
+        <div className="session-time">{timeStr}</div>
+        <div className="session-meta">
+          <span className="session-tz">{tzName} {formatOffset(offset)}</span>
+          <span className="session-live" style={{ color: sess !== 'Off-hours' ? 'var(--color-pos)' : 'var(--color-text-dim)' }}>
+            <span className="session-dot" style={{ background: sessColor, boxShadow: `0 0 8px ${sessColor}` }} />
+            {sess !== 'Off-hours' ? 'Live' : 'Off'}
           </span>
         </div>
       </div>
 
-      {/* ── Drawdown Thermometer ── */}
-      <div className="dd-thermometer">
-        <div className="dd-therm-label">
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <TrendingDown size={10} /> Drawdown
-          </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: ddColor, fontSize: '12px' }}>
-            {Math.abs(currentDdPct).toFixed(2)}%
-          </span>
+      {/* Drawdown */}
+      <div className="dd-mini">
+        <div className="dd-mini-header">
+          <span className="dd-mini-label">Drawdown</span>
+          <span className="dd-mini-value" style={{ color: ddCol }}>{Math.abs(curDd).toFixed(2)}%</span>
         </div>
-        <div className="dd-therm-track">
-          <div className="dd-therm-fill" style={{ width: `${thermWidth}%`, background: ddColor }} />
+        <div className="dd-mini-track">
+          <div className="dd-mini-fill" style={{ width: `${thermW}%`, background: ddCol }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-          <span style={{ fontSize: '10px', color: 'var(--color-text-dim)' }}>Max: {Math.abs(maxDdPct).toFixed(1)}%</span>
-          <span style={{ fontSize: '10px', color: 'var(--color-text-dim)' }}>
-            {Math.abs(currentDdPct) <= 2.5 ? 'Safe' : Math.abs(currentDdPct) <= 5 ? 'Caution' : 'Danger'}
-          </span>
+        <div className="dd-mini-footer">
+          <span>Max {Math.abs(maxDd).toFixed(1)}%</span>
+          <span>{Math.abs(curDd) <= 2.5 ? '● Safe' : Math.abs(curDd) <= 5 ? '● Caution' : '● Danger'}</span>
         </div>
       </div>
 
+      {/* Nav */}
       <nav className="sidebar-nav">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => isActive ? 'sidebar-link active' : 'sidebar-link'}
+        {navItems.map(item => (
+          <NavLink key={item.to} to={item.to}
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
-            <item.icon size={18} />
-            <span className="sidebar-link-text">{item.label}</span>
+            <item.icon size={17} />
+            <span className="nav-link-text">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       <div className="sidebar-footer">
-        <button className="sidebar-link" onClick={toggle} title="Toggle theme">
-          {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
-          <span className="sidebar-link-text">Theme</span>
+        <button className="nav-link" onClick={toggle} title="Toggle theme">
+          {theme === 'dark' ? <Moon size={17} /> : <Sun size={17} />}
+          <span className="nav-link-text">Theme</span>
         </button>
       </div>
     </aside>

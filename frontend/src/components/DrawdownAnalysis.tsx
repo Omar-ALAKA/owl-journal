@@ -7,12 +7,11 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingDown, AlertTriangle, Clock, Target, Zap, Shield, Activity, DollarSign, Percent } from 'lucide-react';
 
 type DdUnit = 'pct' | 'abs' | 'r';
-
 interface Props { accountId?: number; dateFrom?: string; dateTo?: string; }
 
-function toR(absVal: number | null | undefined, avgLoss: number | null | undefined): number | null {
-  if (!absVal || !avgLoss || avgLoss === 0) return null;
-  return Math.abs(absVal) / avgLoss;
+function toR(v: number | null | undefined, avg: number | null | undefined): number | null {
+  if (!v || !avg || avg === 0) return null;
+  return Math.abs(v) / avg;
 }
 
 export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
@@ -24,143 +23,143 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
   });
 
   if (isLoading) return <div className="card"><div className="skeleton" style={{ height: 200 }} /></div>;
-  if (error || !data) return <div className="card"><p className="text-neg">Error loading drawdown analysis</p></div>;
+  if (error || !data) return <div className="card"><p className="t-neg">Error loading drawdown analysis</p></div>;
 
   const {
     max_drawdown_pct, max_drawdown_abs, current_drawdown_pct,
     nb_drawdown_periods, drawdown_periods, underwater_curve,
     current_equity, peak_equity, gain_required_pct, gain_required_abs,
-    avg_win, avg_loss, ev_per_trade, total_trades,
+    avg_loss, ev_per_trade,
     consec_losses_to_overall_limit, consec_losses_to_daily_limit, remaining_dd_room,
     recovery_probability, blowout_risk, median_recovery_trades, mean_recovery_trades,
   } = data;
 
-  const max_dd_r = toR(max_drawdown_abs, avg_loss);
-  const current_dd_r = toR(Math.abs(current_drawdown_pct) / 100 * peak_equity, avg_loss);
-  const remaining_r = toR(remaining_dd_room, avg_loss);
+  const maxR = toR(max_drawdown_abs, avg_loss);
+  const curR = toR(Math.abs(current_drawdown_pct) / 100 * peak_equity, avg_loss);
+  const remR = toR(remaining_dd_room, avg_loss);
 
-  function fmtDd(pctVal: number | null | undefined, absVal: number | null | undefined, rVal: number | null | undefined): string {
-    if (unit === 'pct') return pct(pctVal, 2);
-    if (unit === 'abs') return `$${sf(Math.abs(absVal))}`;
-    if (unit === 'r') return rVal != null ? `${sf(rVal)}R` : '-';
+  function fmt(p: number | null | undefined, a: number | null | undefined, r: number | null | undefined): string {
+    if (unit === 'pct') return pct(p, 2);
+    if (unit === 'abs') return `$${sf(Math.abs(a))}`;
+    if (unit === 'r') return r != null ? `${sf(r)}R` : '-';
     return '-';
   }
 
-  const curveData = underwater_curve.map((p: any) => {
-    const ddPct = Math.abs(Number(p.drawdown_pct) || 0);
-    const ddAbs = ddPct / 100 * (peak_equity || 0);
-    return { date: p.date, equity: Number(p.equity) || 0, pct: ddPct, abs: ddAbs, r: toR(ddAbs, avg_loss) ?? 0 };
+  const curve = underwater_curve.map((p: any) => {
+    const pctv = Math.abs(Number(p.drawdown_pct) || 0);
+    const absv = pctv / 100 * (peak_equity || 0);
+    return { date: p.date, equity: Number(p.equity) || 0, pct: pctv, abs: absv, r: toR(absv, avg_loss) ?? 0 };
   });
 
-  const yKey = unit === 'pct' ? 'pct' : unit === 'abs' ? 'abs' : 'r';
+  const yK = unit === 'pct' ? 'pct' : unit === 'abs' ? 'abs' : 'r';
   const yFmt = (v: number) => unit === 'pct' ? `${v.toFixed(1)}%` : unit === 'abs' ? `$${v.toFixed(0)}` : `${v.toFixed(1)}R`;
-  const tipFmt = (value: any) => {
-    const n = Number(value) || 0;
+  const tipFmt = (v: any) => {
+    const n = Number(v) || 0;
     return [unit === 'pct' ? `${n.toFixed(2)}%` : unit === 'abs' ? `$${n.toFixed(2)}` : `${n.toFixed(2)}R`, 'Drawdown'];
   };
 
-  const hasData = curveData.length > 0;
+  const hasCurve = curve.length > 0;
   const hasPeriods = drawdown_periods.length > 0;
-  const isPosEV = (ev_per_trade || 0) > 0;
-  const isHealthyRec = (recovery_probability || 0) >= 70;
-  const isHighBlow = (blowout_risk || 0) >= 40;
+  const posEV = (ev_per_trade || 0) > 0;
+  const healthyRec = (recovery_probability || 0) >= 70;
+  const highBlow = (blowout_risk || 0) >= 40;
 
-  const unitOpts: { key: DdUnit; label: string; icon: React.ReactNode }[] = [
-    { key: 'pct', label: '%', icon: <Percent size={13} /> },
-    { key: 'abs', label: '$', icon: <DollarSign size={13} /> },
-    { key: 'r', label: 'R', icon: <Activity size={13} /> },
+  const units: { key: DdUnit; label: string; icon: React.ReactNode }[] = [
+    { key: 'pct', label: '%', icon: <Percent size={12} /> },
+    { key: 'abs', label: '$', icon: <DollarSign size={12} /> },
+    { key: 'r', label: 'R', icon: <Activity size={12} /> },
   ];
 
   return (
-    <div className="animate-fadeIn">
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+    <div className="anim-fadeUp">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
         <div>
-          <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-.03em', color: 'var(--color-text-hi)' }}>Drawdown Analysis</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-.03em', color: 'var(--color-text-hi)' }}>Drawdown Analysis</h2>
           <p style={{ fontSize: '13px', color: 'var(--color-text-mute)', marginTop: '4px' }}>Risk metrics & recovery simulation</p>
         </div>
         <div className="toggle-group">
-          {unitOpts.map(o => (
-            <button key={o.key} className={`toggle-btn ${unit === o.key ? 'active' : ''}`} onClick={() => setUnit(o.key)}>
-              {o.icon} {o.label}
+          {units.map(u => (
+            <button key={u.key} className={`toggle-btn ${unit === u.key ? 'active' : ''}`} onClick={() => setUnit(u.key)}>
+              {u.icon} {u.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── KPI Row 1 ── */}
+      {/* KPI Row 1 */}
       <div className="kpi-grid stagger">
-        <div className={`kpi-card ${isHealthyRec ? 'glow-pos' : 'glow-warn'}`}>
-          <div className="kpi-label"><Target size={13} /> Recovery Probability</div>
-          <div className={`kpi-value ${isHealthyRec ? 'pos' : recovery_probability >= 40 ? 'warn' : 'neg'}`}>{pct(recovery_probability, 1)}</div>
-          <div className="kpi-sub">{isHealthyRec ? 'Healthy edge' : recovery_probability >= 40 ? 'Moderate' : 'Math is against you'}</div>
+        <div className={`kpi-card ${healthyRec ? 'kpi-glow-pos' : 'kpi-glow-acc'}`}>
+          <div className="kpi-label"><Target size={12} /> Recovery Probability</div>
+          <div className={`kpi-value ${healthyRec ? 'pos' : recovery_probability >= 40 ? 'warn' : 'neg'}`}>{pct(recovery_probability, 1)}</div>
+          <div className="kpi-sub">{healthyRec ? 'Healthy edge' : recovery_probability >= 40 ? 'Moderate' : 'Math against you'}</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label"><Clock size={13} /> Median Recovery</div>
-          <div className="kpi-value" style={{ fontSize: '24px' }}>{median_recovery_trades} <span style={{ fontSize: '14px', color: 'var(--color-text-mute)' }}>trades</span></div>
+          <div className="kpi-label"><Clock size={12} /> Median Recovery</div>
+          <div className="kpi-value" style={{ fontSize: '22px' }}>{median_recovery_trades} <span style={{ fontSize: '13px', color: 'var(--color-text-mute)' }}>trades</span></div>
           <div className="kpi-sub">Mean: {mean_recovery_trades} trades</div>
         </div>
-        <div className={`kpi-card ${isHighBlow ? 'glow-neg' : ''}`}>
-          <div className="kpi-label"><AlertTriangle size={13} /> Blowout Risk</div>
-          <div className={`kpi-value ${isHighBlow ? 'neg' : 'pos'}`}>{pct(blowout_risk, 1)}</div>
-          <div className="kpi-sub">{isHighBlow ? 'High risk' : 'Acceptable'}</div>
+        <div className={`kpi-card ${highBlow ? 'kpi-glow-neg' : ''}`}>
+          <div className="kpi-label"><AlertTriangle size={12} /> Blowout Risk</div>
+          <div className={`kpi-value ${highBlow ? 'neg' : 'pos'}`}>{pct(blowout_risk, 1)}</div>
+          <div className="kpi-sub">{highBlow ? '⚠ High risk' : 'Acceptable'}</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label"><Zap size={13} /> EV / Trade</div>
-          <div className={`kpi-value ${isPosEV ? 'pos' : 'neg'}`}>${sf(ev_per_trade)}</div>
-          <div className="kpi-sub">{isPosEV ? 'Positive edge ✓' : 'Negative — fix strategy'}</div>
+          <div className="kpi-label"><Zap size={12} /> EV / Trade</div>
+          <div className={`kpi-value ${posEV ? 'pos' : 'neg'}`}>${sf(ev_per_trade)}</div>
+          <div className="kpi-sub">{posEV ? '✓ Positive edge' : '✗ Fix strategy'}</div>
         </div>
       </div>
 
-      {/* ── KPI Row 2 ── */}
+      {/* KPI Row 2 */}
       <div className="kpi-grid stagger">
         <div className="kpi-card">
-          <div className="kpi-label"><TrendingDown size={13} /> Gain to Recover</div>
+          <div className="kpi-label"><TrendingDown size={12} /> Gain to Recover</div>
           <div className="kpi-value warn">{pct(gain_required_pct, 1)}</div>
           <div className="kpi-sub">${sf(gain_required_abs)} from ${sf(current_equity)}</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label"><Shield size={13} /> Losses to Limit</div>
+          <div className="kpi-label"><Shield size={12} /> Losses to Limit</div>
           <div className={`kpi-value ${consec_losses_to_overall_limit <= 3 ? 'neg' : consec_losses_to_overall_limit <= 5 ? 'warn' : 'pos'}`}>
-            {consec_losses_to_overall_limit} <span style={{ fontSize: '14px', color: 'var(--color-text-mute)' }}>losses</span>
+            {consec_losses_to_overall_limit} <span style={{ fontSize: '13px', color: 'var(--color-text-mute)' }}>losses</span>
           </div>
-          <div className="kpi-sub">{unit === 'r' ? `${sf(remaining_r)}R` : `$${sf(remaining_dd_room)}`} remaining</div>
+          <div className="kpi-sub">{unit === 'r' ? `${sf(remR)}R` : `$${sf(remaining_dd_room)}`} remaining</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label"><Activity size={13} /> Daily Limit</div>
+          <div className="kpi-label"><Activity size={12} /> Daily Limit</div>
           <div className={`kpi-value ${consec_losses_to_daily_limit <= 3 ? 'neg' : consec_losses_to_daily_limit <= 5 ? 'warn' : 'pos'}`}>
-            {consec_losses_to_daily_limit} <span style={{ fontSize: '14px', color: 'var(--color-text-mute)' }}>losses</span>
+            {consec_losses_to_daily_limit} <span style={{ fontSize: '13px', color: 'var(--color-text-mute)' }}>losses</span>
           </div>
           <div className="kpi-sub">5% daily limit</div>
         </div>
-        <div className={`kpi-card ${Math.abs(current_drawdown_pct) > 5 ? 'glow-neg' : ''}`}>
-          <div className="kpi-label"><Activity size={13} /> Current Drawdown</div>
+        <div className={`kpi-card ${Math.abs(current_drawdown_pct) > 5 ? 'kpi-glow-neg' : ''}`}>
+          <div className="kpi-label"><Activity size={12} /> Current Drawdown</div>
           <div className={`kpi-value ${Math.abs(current_drawdown_pct) > 5 ? 'neg' : Math.abs(current_drawdown_pct) > 2.5 ? 'warn' : 'pos'}`}>
-            {fmtDd(Math.abs(current_drawdown_pct), Math.abs(current_drawdown_pct) / 100 * peak_equity, current_dd_r)}
+            {fmt(Math.abs(current_drawdown_pct), Math.abs(current_drawdown_pct) / 100 * peak_equity, curR)}
           </div>
-          <div className="kpi-sub">Max: {fmtDd(Math.abs(max_drawdown_pct), Math.abs(max_drawdown_abs), max_dd_r)}</div>
+          <div className="kpi-sub">Max: {fmt(Math.abs(max_drawdown_pct), Math.abs(max_drawdown_abs), maxR)}</div>
         </div>
       </div>
 
-      {/* ── Asymmetric Math ── */}
-      <div className="card animate-fadeInScale" style={{ animationDelay: '200ms' }}>
-        <div className="card-title">The Asymmetric Math</div>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-mute)', marginBottom: '16px', lineHeight: 1.6 }}>
-          You always need to gain more than you lost to recover, because you're growing a smaller base.
+      {/* Asymmetric Math */}
+      <div className="card anim-fadeUp" style={{ animationDelay: '250ms' }}>
+        <div className="card-title">The Asymmetric Math of Losses</div>
+        <p style={{ fontSize: '13px', color: 'var(--color-text-mute)', marginBottom: '18px', lineHeight: 1.6 }}>
+          When you lose, you need to gain more to recover — because you're working from a smaller base.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
           {[5, 10, 20, 30, 40, 50].map(dd => {
             const gain = 1 / (1 - dd / 100) - 1;
-            const isCurrent = Math.abs(current_drawdown_pct) >= dd - 2 && Math.abs(current_drawdown_pct) < dd + 3;
+            const on = Math.abs(current_drawdown_pct) >= dd - 2 && Math.abs(current_drawdown_pct) < dd + 3;
             return (
               <div key={dd} style={{
-                padding: '14px 12px', borderRadius: 'var(--radius)', textAlign: 'center',
-                background: isCurrent ? 'var(--color-acc-bg)' : 'var(--color-bg-card-2)',
-                border: isCurrent ? '1px solid var(--color-acc-border)' : '1px solid var(--color-border)',
+                padding: '16px 12px', borderRadius: 'var(--r)', textAlign: 'center',
+                background: on ? 'var(--color-acc-bg)' : 'var(--color-bg-surface)',
+                border: on ? '1px solid var(--color-acc-border)' : '1px solid var(--color-border)',
                 transition: 'all .2s ease',
               }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-mute)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{dd}% DD</div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: dd >= 30 ? 'var(--color-neg)' : dd >= 20 ? 'var(--color-warn)' : 'var(--color-pos)', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-mute)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{dd}% DD</div>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: dd >= 30 ? 'var(--color-neg)' : dd >= 20 ? 'var(--color-warn)' : 'var(--color-pos)', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>
                   +{(gain * 100).toFixed(1)}%
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--color-text-dim)', marginTop: '4px' }}>to recover</div>
@@ -170,62 +169,51 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
         </div>
       </div>
 
-      {/* ── Underwater Curve ── */}
-      {hasData ? (
-        <div className="card animate-fadeInScale" style={{ animationDelay: '300ms' }}>
+      {/* Underwater Curve */}
+      {hasCurve ? (
+        <div className="card anim-fadeUp" style={{ animationDelay: '350ms' }}>
           <div className="card-title">
             Underwater Curve
-            <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-mute)', textTransform: 'none', letterSpacing: 0 }}>
+            <span style={{ fontSize: '11px', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--color-text-mute)' }}>
               {unit === 'pct' ? '% of peak' : unit === 'abs' ? 'USD' : 'R Multiple'}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={curveData}>
+            <AreaChart data={curve}>
               <defs>
-                <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F87171" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="#F87171" stopOpacity={0.03} />
+                <linearGradient id="ddG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#F87171" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#F87171" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-              <XAxis dataKey="date" tick={{ fill: '#6B7488', fontSize: 10 }} tickFormatter={(v: string) => v?.slice(5) || ''} />
-              <YAxis domain={[0, 'auto']} tick={{ fill: '#6B7488', fontSize: 10 }} tickFormatter={yFmt} />
-              <Tooltip
-                contentStyle={{ background: '#141820', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
-                labelStyle={{ color: '#6B7488' }}
-                formatter={tipFmt}
-              />
-              <Area type="monotone" dataKey={yKey} stroke="#F87171" fill="url(#ddGrad)" strokeWidth={2} dot={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
+              <XAxis dataKey="date" tick={{ fill: '#5A6478', fontSize: 10 }} tickFormatter={(v: string) => v?.slice(5) || ''} />
+              <YAxis domain={[0, 'auto']} tick={{ fill: '#5A6478', fontSize: 10 }} tickFormatter={yFmt} />
+              <Tooltip contentStyle={{ background: '#131720', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }} labelStyle={{ color: '#5A6478' }} formatter={tipFmt} />
+              <Area type="monotone" dataKey={yK} stroke="#F87171" fill="url(#ddG)" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="card"><p className="text-mute">No underwater curve data yet.</p></div>
+        <div className="card"><p className="t-mute">No underwater curve data yet.</p></div>
       )}
 
-      {/* ── Periods Table ── */}
+      {/* Periods Table */}
       {hasPeriods ? (
-        <div className="card animate-fadeInScale" style={{ animationDelay: '400ms' }}>
+        <div className="card anim-fadeUp" style={{ animationDelay: '450ms' }}>
           <div className="card-title">Drawdown Periods ({nb_drawdown_periods})</div>
           <div style={{ overflowX: 'auto' }}>
-            <table className="trade-table">
-              <thead>
-                <tr>
-                  <th>Start</th>
-                  <th>End</th>
-                  <th>Depth ({unit === 'pct' ? '%' : unit === 'abs' ? '$' : 'R'})</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
+            <table className="table">
+              <thead><tr><th>Start</th><th>End</th><th>Depth ({unit === 'pct' ? '%' : unit === 'abs' ? '$' : 'R'})</th><th>Duration</th></tr></thead>
               <tbody>
                 {[...drawdown_periods].sort((a: any, b: any) => a.depth_pct - b.depth_pct).map((p: any, i: number) => (
                   <tr key={i}>
                     <td>{p.start || '-'}</td>
                     <td>{p.end || '-'}</td>
-                    <td className="text-neg" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                      {fmtDd(Math.abs(p.depth_pct), Math.abs(p.depth_abs), toR(Math.abs(p.depth_abs), avg_loss))}
+                    <td className="t-neg" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {fmt(Math.abs(p.depth_pct), Math.abs(p.depth_abs), toR(Math.abs(p.depth_abs), avg_loss))}
                     </td>
-                    <td className="text-mute">{p.duration_days}d</td>
+                    <td className="t-mute">{p.duration_days}d</td>
                   </tr>
                 ))}
               </tbody>
@@ -233,7 +221,7 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
           </div>
         </div>
       ) : (
-        <div className="card"><p className="text-mute">No drawdown periods detected.</p></div>
+        <div className="card"><p className="t-mute">No drawdown periods detected.</p></div>
       )}
     </div>
   );
