@@ -5,22 +5,9 @@ import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api
 import type { Trade, Account } from '../types';
 import { Trash2, Filter, X, Edit2 } from 'lucide-react';
 
-// Safe number formatter
-const fmt = (v: number | undefined | null, decimals = 2): string => {
-  if (v === undefined || v === null || isNaN(v)) return '-';
-  return Number(v).toFixed(decimals);
-};
-
-const fmtPnl = (v: number | undefined | null): string => {
-  if (v === undefined || v === null || isNaN(v)) return '-';
-  const n = Number(v);
-  return `${n >= 0 ? '+' : ''}$${n.toFixed(2)}`;
-};
-
-const fmtR = (v: number | undefined | null): string => {
-  if (v === undefined || v === null || isNaN(v)) return '-';
-  return `${Number(v).toFixed(2)}R`;
-};
+import { sf, pnl as fmtPnl, rfmt as fmtR } from '../lib/safe';
+// sf is already named sf, keep backward-compatible alias
+const fmt = sf;
 
 export function TradesPage() {
   const qc = useQueryClient();

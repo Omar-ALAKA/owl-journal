@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.models.account import Account
+from app.schemas.account import AccountCreate, AccountUpdate
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -57,8 +58,8 @@ async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/")
-async def create_account(data: dict, db: AsyncSession = Depends(get_db)):
-    account = Account(**data)
+async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)):
+    account = Account(**data.model_dump())
     db.add(account)
     await db.flush()
     await db.refresh(account)
@@ -66,15 +67,15 @@ async def create_account(data: dict, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{account_id}")
-async def update_account(account_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+async def update_account(account_id: int, data: AccountUpdate, db: AsyncSession = Depends(get_db)):
     import logging, traceback
     logger = logging.getLogger(__name__)
     result = await db.execute(select(Account).where(Account.id == account_id))
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    logger.info(f"Updating account {account_id} with keys: {list(data.keys())}")
-    for key, value in data.items():
+    logger.info(f"Updating account {account_id} with keys: {list(data.model_dump().keys())}")
+    for key, value in data.model_dump(exclude_unset=True).items():
         if value is None:
             continue
         if hasattr(account, key):
