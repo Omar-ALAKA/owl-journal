@@ -1,7 +1,7 @@
 // routes/trades.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api';
+import { fetchTrades, deleteTrade, fetchAccounts, updateTrade, fetchStrategies } from '../lib/api';
 import type { Trade, Account } from '../types';
 import { Trash2, Filter, X, Edit2 } from 'lucide-react';
 import { sf, pnl as fmtPnl, rfmt as fmtR } from '../lib/safe';
@@ -78,9 +78,15 @@ export function TradesPage() {
     queryFn: () => fetchAccounts().catch(() => ({ accounts: [] })),
   });
 
+  const { data: strategiesData } = useQuery({
+    queryKey: ['strategies'],
+    queryFn: () => fetchStrategies().catch(() => ({ strategies: [] })),
+  });
+
   const trades: Trade[] = data?.trades || [];
   const total = data?.total || 0;
   const accounts: Account[] = accountsData?.accounts || [];
+  const strategies: { name: string }[] = strategiesData?.strategies || [];
   const totalPages = Math.ceil(total / limit);
 
   const handleDelete = async (id: number) => {
@@ -345,8 +351,12 @@ export function TradesPage() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Setup</label>
-                <input className="form-input" value={editForm.setup || ''} onChange={e => setEditForm({ ...editForm, setup: e.target.value })} />
+                <label className="form-label">Setup (Strategy)</label>
+                <CustomSelect value={editForm.setup || ''} onChange={v => setEditForm({ ...editForm, setup: v })}
+                  options={[
+                    { value: '', label: '-' },
+                    ...strategies.map((s: any) => ({ value: s.name, label: s.name })),
+                  ]} placeholder="-" />
               </div>
             </div>
             <div className="form-group">
