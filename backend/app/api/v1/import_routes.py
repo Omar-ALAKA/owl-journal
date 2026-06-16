@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -243,7 +243,7 @@ def _cell_to_str(cell: Any) -> str:
     return str(cell).strip()
 
 
-def _parse_csv_content(content: str) -> list[dict]:
+def _parse_csv_content(content: str, tz_code: str = "UTC") -> list[dict]:
     """Parse CSV content and return list of trade dicts."""
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
@@ -292,19 +292,18 @@ def _parse_csv_content(content: str) -> list[dict]:
         notes = get("notes")
         ticket = get("ticket")
 
-        # Auto-detect session from open_time using request timezone
+        # Auto-detect session from open_time using timezone
         if not session and open_time:
             try:
-                from app.middleware.timezone_middleware import get_request_offset
-                from app.services.timezone import get_session_for_time
-                offset = get_request_offset(open_time)
+                from app.services.timezone import get_offset, get_session_for_time
+                offset = get_offset(tz_code, open_time)
                 session = get_session_for_time(open_time, offset)
             except Exception:
                 # Fallback: detect session from UTC hour
                 h = open_time.hour
-                if 0 <= h < 7:
+                if 0 <= h < 9:
                     session = "Asia"
-                elif 7 <= h < 12:
+                elif 9 <= h < 12:
                     session = "London"
                 elif 12 <= h < 17:
                     session = "New York"
@@ -341,7 +340,7 @@ def _parse_csv_content(content: str) -> list[dict]:
     return trades
 
 
-def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
+def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC") -> list[dict]:
     """Parse XLSX content directly using openpyxl.
 
     Handles multi-section MT5 exports (Positions / Orders / Deals)
@@ -451,19 +450,18 @@ def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
             notes = get("notes")
             ticket = get("ticket")
 
-            # Auto-detect session from open_time using request timezone
+            # Auto-detect session from open_time using timezone
             if not session and open_time:
                 try:
-                    from app.middleware.timezone_middleware import get_request_offset
-                    from app.services.timezone import get_session_for_time
-                    offset = get_request_offset(open_time)
+                    from app.services.timezone import get_offset, get_session_for_time
+                    offset = get_offset(tz_code, open_time)
                     session = get_session_for_time(open_time, offset)
                 except Exception:
                     # Fallback: detect session from UTC hour
                     h = open_time.hour
-                    if 0 <= h < 7:
+                    if 0 <= h < 9:
                         session = "Asia"
-                    elif 7 <= h < 12:
+                    elif 9 <= h < 12:
                         session = "London"
                     elif 12 <= h < 17:
                         session = "New York"
@@ -512,6 +510,7 @@ def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
 # ───────────────────────────────────────────────────────────
 @router.post("/preview")
 async def preview_import(
+    request: Request,
     file: UploadFile = File(...),
     account_id: int = Form(None),
     db: AsyncSession = Depends(get_db),
@@ -521,6 +520,9 @@ async def preview_import(
 
     logger.info(f"Import preview: file={file.filename}")
     filename = file.filename.lower()
+
+    # Get timezone from request header
+    tz_code = request.headers.get("X-Timezone", "UTC")
 
     content_bytes = await file.read()
     logger.info(f"Import preview: file={file.filename}, size={len(content_bytes)}")
@@ -536,11 +538,11 @@ async def preview_import(
                 continue
         else:
             raise HTTPException(400, detail="Unable to decode file")
-        trades = _parse_csv_content(content)
+        trades = _parse_csv_content(content, tz_code=tz_code)
 
     elif filename.endswith((".xlsx", ".xls")):
         try:
-            trades = _parse_xlsx_content(content_bytes)
+            trades = _parse_xlsx_content(content_bytes, tz_code=tz_code)
         except ImportError:
             raise HTTPException(
                 500,
