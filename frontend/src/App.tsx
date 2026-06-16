@@ -19,6 +19,7 @@ const AccountsPage = lazy(() => import('./routes/accounts').then(m => ({ default
 const ImportPage = lazy(() => import('./routes/import').then(m => ({ default: m.ImportPage })));
 const SettingsPage = lazy(() => import('./routes/settings').then(m => ({ default: m.SettingsPage })));
 const SessionsPage = lazy(() => import('./routes/sessions').then(m => ({ default: m.SessionsPage })));
+const FundedPage = lazy(() => import('./routes/funded').then(m => ({ default: m.FundedPage })));
 
 // Error Boundary
 interface EBProps { children: ReactNode; }
@@ -95,6 +96,7 @@ export default function App() {
                   <Route path="/strategies" element={<StrategiesPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/accounts" element={<AccountsPage />} />
+                  <Route path="/funded" element={<FundedPage />} />
                   <Route path="/import" element={<ImportPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/sessions" element={<SessionsPage />} />

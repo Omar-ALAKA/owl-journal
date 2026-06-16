@@ -19,12 +19,12 @@ export function AccountsPage() {
   const [form, setForm] = useState({
     name: '', broker: '', broker_acct: '', account_type: 'challenge' as 'challenge' | 'funded' | 'personal',
     phase: '', status: 'active', starting_balance: '', target_profit_pct: '10',
-    max_drawdown_pct: '7', daily_loss_pct: '5', min_trading_days: '0', notes: '',
+    max_drawdown_pct: '7', daily_loss_pct: '5', min_trading_days: '0', personal_target_pct: '5', notes: '',
   });
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: '', broker: '', broker_acct: '', account_type: 'challenge', phase: '', status: 'active', starting_balance: '', target_profit_pct: '10', max_drawdown_pct: '7', daily_loss_pct: '5', min_trading_days: '0', notes: '' });
+    setForm({ name: '', broker: '', broker_acct: '', account_type: 'challenge', phase: '', status: 'active', starting_balance: '', target_profit_pct: '10', max_drawdown_pct: '7', daily_loss_pct: '5', min_trading_days: '0', personal_target_pct: '5', notes: '' });
     setShowModal(true);
   };
 
@@ -35,13 +35,13 @@ export function AccountsPage() {
       account_type: a.account_type, phase: a.phase || '', status: a.status,
       starting_balance: String(a.starting_balance), target_profit_pct: String(a.target_profit_pct),
       max_drawdown_pct: String(a.max_drawdown_pct), daily_loss_pct: String(a.daily_loss_pct),
-      min_trading_days: String(a.min_trading_days ?? 0), notes: a.notes || '',
+      min_trading_days: String(a.min_trading_days ?? 0), personal_target_pct: String((a as any).personal_target_pct ?? 5), notes: a.notes || '',
     });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    const payload = { ...form, starting_balance: parseFloat(form.starting_balance) || 0, target_profit_pct: parseFloat(form.target_profit_pct) || 10, max_drawdown_pct: parseFloat(form.max_drawdown_pct) || 7, daily_loss_pct: parseFloat(form.daily_loss_pct) || 5, min_trading_days: parseInt(form.min_trading_days) || 0 };
+    const payload = { ...form, starting_balance: parseFloat(form.starting_balance) || 0, target_profit_pct: parseFloat(form.target_profit_pct) || 10, max_drawdown_pct: parseFloat(form.max_drawdown_pct) || 7, daily_loss_pct: parseFloat(form.daily_loss_pct) || 5, min_trading_days: parseInt(form.min_trading_days) || 0, personal_target_pct: parseFloat(form.personal_target_pct) || 5 };
     try {
       if (editing) {
         await updateAccount(editing.id, payload);
@@ -176,6 +176,10 @@ export function AccountsPage() {
               <div className="form-group">
                 <label className="form-label">Minimum Trading Days (0 = no minimum)</label>
                 <input className="form-input" type="number" min="0" value={form.min_trading_days} onChange={e => setForm({ ...form, min_trading_days: e.target.value })} placeholder="0" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Personal Target % (funded)</label>
+                <input className="form-input" type="number" step="0.5" value={form.personal_target_pct} onChange={e => setForm({ ...form, personal_target_pct: e.target.value })} placeholder="5" />
               </div>
             </div>
             <div className="form-group">

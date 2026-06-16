@@ -18,6 +18,7 @@ class AccountBase(BaseModel):
     target_profit_pct: float = 10
     max_drawdown_pct: float = 7
     daily_loss_pct: float = 5
+    personal_target_pct: float = 5
     notes: Optional[str] = None
 
 
@@ -37,6 +38,7 @@ class AccountUpdate(BaseModel):
     target_profit_pct: Optional[float] = None
     max_drawdown_pct: Optional[float] = None
     daily_loss_pct: Optional[float] = None
+    personal_target_pct: Optional[float] = None
     notes: Optional[str] = None
 
 

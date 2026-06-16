@@ -359,3 +359,71 @@ export interface ImportPreview {
   account?: { id: number; name: string; broker?: string };
   trades: Partial<Trade>[];
 }
+
+// ── Funded Account Types ──
+
+export interface FundedAccount {
+  id: number;
+  name: string;
+  broker?: string;
+  status: string;
+  starting_balance: number;
+  current_equity: number;
+  net_pnl: number;
+  net_pnl_pct: number;
+  personal_target_pct: number;
+  personal_target_amount: number;
+  personal_progress_pct: number;
+  personal_target_reached: boolean;
+  max_drawdown: number;
+  max_drawdown_pct: number;
+  drawdown_limit_pct: number;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_payouts: number;
+  created_at?: string;
+}
+
+export interface FundedSummary {
+  account_id: number;
+  name: string;
+  broker?: string;
+  status: string;
+  starting_balance: number;
+  current_equity: number;
+  net_pnl: number;
+  net_pnl_pct: number;
+  personal_target_pct: number;
+  personal_target_amount: number;
+  personal_progress_pct: number;
+  personal_target_reached: boolean;
+  max_drawdown_pct: number;
+  drawdown_limit_pct: number;
+  drawdown_remaining_pct: number;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_payouts: number;
+  payouts: PayoutRecord[];
+}
+
+export interface PayoutRecord {
+  id: number;
+  account_id: number;
+  amount: number;
+  payout_date: string;
+  status: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface PayoutCreate {
+  account_id: number;
+  amount: number;
+  payout_date: string;
+  status?: string;
+  notes?: string;
+}

@@ -4,7 +4,8 @@ import type {
   Trade, Account, Stats, SessionStat, SetupStat, DailyStat,
   RBucket, RSummary, EquityPoint, DailyEquity, ChallengeStatus, ChallengeData,
   Checkpoint, Violation, JournalSession, StreakData, JournalDaily,
-  CalendarMonth, HistoryAccount, Strategy, ImportPreview
+  CalendarMonth, HistoryAccount, Strategy, ImportPreview,
+  FundedAccount, FundedSummary, PayoutRecord, PayoutCreate
 } from '../types';
 import { useTimezoneStore } from '../stores/timezone';
 
@@ -251,3 +252,22 @@ export const fetchDrawdownAnalysis = (accountId?: number, dateFrom?: string, dat
     mean_recovery_trades: number;
   }>('/analytics/drawdown', Object.keys(params).length ? params : undefined);
 };
+
+// ── Funded Accounts ──────────────────────────────
+export const fetchFundedAccounts = () =>
+  get<{ accounts: FundedAccount[]; count: number }>('/funded/accounts');
+
+export const fetchFundedSummary = (accountId: number) =>
+  get<FundedSummary>(`/funded/${accountId}/summary`);
+
+export const fetchPayouts = (accountId: number) =>
+  get<{ payouts: PayoutRecord[]; total: number }>(`/funded/${accountId}/payouts`);
+
+export const createPayout = (accountId: number, data: PayoutCreate) =>
+  post<PayoutRecord>(`/funded/${accountId}/payouts`, data);
+
+export const updatePayout = (accountId: number, payoutId: number, data: Partial<PayoutCreate>) =>
+  put<PayoutRecord>(`/funded/${accountId}/payouts/${payoutId}`, data);
+
+export const deletePayout = (accountId: number, payoutId: number) =>
+  del<{ message: string; id: number }>(`/funded/${accountId}/payouts/${payoutId}`);

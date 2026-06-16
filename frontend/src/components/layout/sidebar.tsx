@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Trophy, BookOpen, Clock, Calendar,
   ArrowLeftRight, Activity, Target, CreditCard, Upload,
-  Moon, Sun, Zap,
+  Moon, Sun, Zap, Wallet,
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/theme';
 import { useTimezoneStore, getTimezoneOffset, getEffectiveTzName, getCurrentSession, formatOffset } from '@/stores/timezone';
@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/challenge', icon: Trophy, label: 'Challenge' },
+  { to: '/funded', icon: Wallet, label: 'Funded' },
   { to: '/journal', icon: BookOpen, label: 'Journal' },
   { to: '/history', icon: Clock, label: 'History' },
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
