@@ -5,6 +5,8 @@ import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api
 import type { Trade, Account } from '../types';
 import { Trash2, Filter, X, Edit2 } from 'lucide-react';
 import { sf, pnl as fmtPnl, rfmt as fmtR } from '../lib/safe';
+import toast from 'react-hot-toast';
+import { format, parseISO } from 'date-fns';
 const fmt = sf;
 
 // Custom Select component (shadcn-style without the dependency)
@@ -83,8 +85,14 @@ export function TradesPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this trade?')) return;
-    await deleteTrade(id);
-    qc.invalidateQueries({ queryKey: ['trades'] });
+    try {
+      await deleteTrade(id);
+      qc.invalidateQueries({ queryKey: ['trades'] });
+      toast.success('Trade supprimé');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
+    }
   };
 
   const openEdit = (t: Trade) => {
@@ -111,9 +119,15 @@ export function TradesPage() {
 
   const handleSaveEdit = async () => {
     if (!editingTrade) return;
-    await updateTrade(editingTrade.id, editForm);
-    qc.invalidateQueries({ queryKey: ['trades'] });
-    setEditingTrade(null);
+    try {
+      await updateTrade(editingTrade.id, editForm);
+      qc.invalidateQueries({ queryKey: ['trades'] });
+      setEditingTrade(null);
+      toast.success('Trade mis à jour');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
+    }
   };
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v);
@@ -195,7 +209,7 @@ export function TradesPage() {
               <tbody>
                 {trades.map(t => (
                   <tr key={t.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{t.open_time?.split('T')[0]}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{t.open_time ? format(parseISO(t.open_time), 'dd MMM yyyy, HH:mm') : '-'}</td>
                     <td style={{ fontWeight: 600 }}>{t.symbol}</td>
                     <td>
                       <span style={{

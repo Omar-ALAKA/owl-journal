@@ -1,7 +1,7 @@
 # app/api/v1/router.py
 from fastapi import APIRouter
 from app.api.v1 import trades, accounts, strategies, journal, history, challenge
-from app.api.v1 import import_routes, analytics, calendar, equity, timezone_routes
+from app.api.v1 import import_routes, analytics, calendar, equity, timezone_routes, events
 
 api_router = APIRouter()
 api_router.include_router(trades.router)
@@ -15,3 +15,4 @@ api_router.include_router(analytics.router)
 api_router.include_router(calendar.router)
 api_router.include_router(equity.router)
 api_router.include_router(timezone_routes.router)
+api_router.include_router(events.router)

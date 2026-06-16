@@ -4,6 +4,8 @@ import { fetchCurrentChallenge, fetchCheckpoints, createCheckpoint, fetchViolati
 import type { ChallengeData, Checkpoint, Violation } from '../types';
 import { Trophy, AlertTriangle, Shield, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { format, parseISO } from 'date-fns';
 
 export function ChallengePage() {
   const qc = useQueryClient();
@@ -33,17 +35,22 @@ export function ChallengePage() {
 
   const handleAddCheckpoint = async () => {
     if (challenges.length === 0) return;
-    await createCheckpoint({
-      account_id: challenges[0].id,
-      checkpoint_type: cpForm.checkpoint_type,
-      balance: parseFloat(cpForm.balance) || 0,
-      equity: parseFloat(cpForm.equity) || 0,
-      drawdown: parseFloat(cpForm.drawdown) || 0,
-      notes: cpForm.notes,
-    });
-    qc.invalidateQueries({ queryKey: ['checkpoints'] });
-    qc.invalidateQueries({ queryKey: ['challenge-current'] });
-    setShowCpModal(false);
+    try {
+      await createCheckpoint({
+        account_id: challenges[0].id,
+        checkpoint_type: cpForm.checkpoint_type,
+        balance: parseFloat(cpForm.balance) || 0,
+        equity: parseFloat(cpForm.equity) || 0,
+        drawdown: parseFloat(cpForm.drawdown) || 0,
+        notes: cpForm.notes,
+      });
+      qc.invalidateQueries({ queryKey: ['checkpoints'] });
+      qc.invalidateQueries({ queryKey: ['challenge-current'] });
+      setShowCpModal(false);
+      toast.success('Checkpoint ajouté');
+    } catch (e: any) {
+      toast.error('Erreur: ' + (e.message || 'Impossible d\'ajouter le checkpoint'));
+    }
   };
 
   return (
@@ -171,7 +178,7 @@ export function ChallengePage() {
               <tbody>
                 {checkpoints.map(cp => (
                   <tr key={cp.id}>
-                    <td>{cp.created_at?.split('T')[0] || '-'}</td>
+                    <td>{cp.created_at ? format(parseISO(cp.created_at), 'dd MMM yyyy, HH:mm') : '-'}</td>
                     <td><span className="badge badge-accent">{cp.checkpoint_type}</span></td>
                     <td>${cp.balance.toFixed(2)}</td>
                     <td>${cp.equity.toFixed(2)}</td>

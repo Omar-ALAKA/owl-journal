@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAccounts, createAccount, updateAccount, deleteAccount } from '../lib/api';
 import type { Account } from '../types';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { format, parseISO } from 'date-fns';
 
 export function AccountsPage() {
   const qc = useQueryClient();
@@ -40,19 +42,31 @@ export function AccountsPage() {
 
   const handleSave = async () => {
     const payload = { ...form, starting_balance: parseFloat(form.starting_balance) || 0, target_profit_pct: parseFloat(form.target_profit_pct) || 10, max_drawdown_pct: parseFloat(form.max_drawdown_pct) || 7, daily_loss_pct: parseFloat(form.daily_loss_pct) || 5, min_trading_days: parseInt(form.min_trading_days) || 0 };
-    if (editing) {
-      await updateAccount(editing.id, payload);
-    } else {
-      await createAccount(payload);
+    try {
+      if (editing) {
+        await updateAccount(editing.id, payload);
+      } else {
+        await createAccount(payload);
+      }
+      qc.invalidateQueries({ queryKey: ['accounts'] });
+      setShowModal(false);
+      toast.success(editing ? 'Compte mis à jour' : 'Compte créé');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
     }
-    qc.invalidateQueries({ queryKey: ['accounts'] });
-    setShowModal(false);
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this account and all its trades?')) return;
-    await deleteAccount(id);
-    qc.invalidateQueries({ queryKey: ['accounts'] });
+    try {
+      await deleteAccount(id);
+      qc.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Compte supprimé');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
+    }
   };
 
   return (

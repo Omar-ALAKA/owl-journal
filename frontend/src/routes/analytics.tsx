@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchSessionAnalysis, fetchSetupAnalysis, fetchRDistribution, fetchDailyStats } from '../lib/api';
 import type { SessionStat, SetupStat, RBucket, RSummary, DailyStat } from '../types';
 import { DrawdownAnalysis } from '../components/DrawdownAnalysis';
+import { HeatmapAnalytics } from '../components/HeatmapAnalytics';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell
@@ -11,7 +12,7 @@ import {
 import { Target, Clock, TrendingDown } from 'lucide-react';
 
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<'sessions' | 'setups' | 'r-dist' | 'daily' | 'drawdown'>('sessions');
+  const [tab, setTab] = useState<'sessions' | 'setups' | 'r-dist' | 'daily' | 'drawdown' | 'heatmap'>('sessions');
 
   const { data: sessionsData } = useQuery({
     queryKey: ['session-analysis'],
@@ -52,6 +53,7 @@ export function AnalyticsPage() {
         <button className={`tab ${tab === 'setups' ? 'active' : ''}`} onClick={() => setTab('setups')}><Target size={14} style={{ marginRight: '6px' }} />Setups</button>
         <button className={`tab ${tab === 'r-dist' ? 'active' : ''}`} onClick={() => setTab('r-dist')}><TrendingDown size={14} style={{ marginRight: '6px' }} />R-Distribution</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>Daily Stats</button>
+        <button className={`tab ${tab === 'heatmap' ? 'active' : ''}`} onClick={() => setTab('heatmap')}>Heatmap</button>
         <button className={`tab ${tab === 'drawdown' ? 'active' : ''}`} onClick={() => setTab('drawdown')}><TrendingDown size={14} style={{ marginRight: '6px' }} />Drawdown</button>
       </div>
 
@@ -208,6 +210,10 @@ export function AnalyticsPage() {
 
       {tab === 'drawdown' && (
         <DrawdownAnalysis />
+      )}
+
+      {tab === 'heatmap' && (
+        <HeatmapAnalytics />
       )}
     </div>
   );

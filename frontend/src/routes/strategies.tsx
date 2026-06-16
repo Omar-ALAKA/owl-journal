@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchStrategies, createStrategy, updateStrategy, deleteStrategy } from '../lib/api';
 import type { Strategy } from '../types';
 import { Plus, Edit2, Trash2, X, Target, CheckSquare, Square } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { format, parseISO } from 'date-fns';
 
 const PRESET_RULES = [
   'Trade uniquement en direction du trend',
@@ -72,19 +74,31 @@ export function StrategiesPage() {
 
   const handleSave = async () => {
     const payload = { name: formName, description: formDesc, rules: formRules };
-    if (editing) {
-      await updateStrategy(editing.id, payload);
-    } else {
-      await createStrategy(payload);
+    try {
+      if (editing) {
+        await updateStrategy(editing.id, payload);
+      } else {
+        await createStrategy(payload);
+      }
+      qc.invalidateQueries({ queryKey: ['strategies'] });
+      setShowModal(false);
+      toast.success(editing ? 'Stratégie mise à jour' : 'Stratégie créée');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
     }
-    qc.invalidateQueries({ queryKey: ['strategies'] });
-    setShowModal(false);
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this strategy?')) return;
-    await deleteStrategy(id);
-    qc.invalidateQueries({ queryKey: ['strategies'] });
+    try {
+      await deleteStrategy(id);
+      qc.invalidateQueries({ queryKey: ['strategies'] });
+      toast.success('Stratégie supprimée');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error('Erreur: ' + msg);
+    }
   };
 
   return (

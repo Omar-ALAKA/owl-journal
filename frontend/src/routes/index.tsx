@@ -10,6 +10,7 @@ import {
   BarChart, Bar, Cell,
 } from 'recharts';
 import { DollarSign, Target, Activity, TrendingDown, Zap } from 'lucide-react';
+import CountUp from 'react-countup';
 
 const EMPTY_STATS: Stats = {
   net_profit: 0, gross_profit: 0, gross_loss: 0, total_trades: 0,
@@ -36,7 +37,7 @@ function useDashboardData() {
 }
 
 function KpiCard({ icon, label, value, sub, variant, accent }: {
-  icon: React.ReactNode; label: string; value: string; sub: string; variant?: 'profit' | 'loss' | 'accent'; accent?: string;
+  icon: React.ReactNode; label: string; value: string | React.ReactNode; sub: string; variant?: 'profit' | 'loss' | 'accent'; accent?: string;
 }) {
   const borderLeft = accent ? `3px solid ${accent}` : undefined;
   return (
@@ -89,13 +90,13 @@ export function DashboardPage() {
       </div>
 
       <motion.div className="kpi-grid stagger" variants={sectionVariants} initial="hidden" animate="visible">
-        <KpiCard icon={<DollarSign size={11} />} label="Net P&L" value={pnl(s.net_profit)}
+        <KpiCard icon={<DollarSign size={11} />} label="Net P&L" value={<CountUp start={0} end={s.net_profit} duration={1.2} decimals={2} prefix={s.net_profit >= 0 ? '+$' : '-$'} separator="," />}
           sub={`${pnl(s.gross_profit)} profit · ${pnl(s.gross_loss)} loss`} variant={s.net_profit >= 0 ? 'profit' : 'loss'} accent="#22C55E" />
         <KpiCard icon={<Target size={11} />} label="Profit Factor" value={pf}
           sub={`Avg R: ${s.avg_r >= 0 ? '+' : ''}${sf(s.avg_r)}R`} variant={s.profit_factor >= 1 ? 'profit' : 'loss'} accent="#7C5CFC" />
-        <KpiCard icon={<Activity size={11} />} label="Win Rate" value={pct(s.win_rate)}
+        <KpiCard icon={<Activity size={11} />} label="Win Rate" value={<CountUp start={0} end={s.win_rate} duration={1.2} decimals={1} suffix="%" />}
           sub={`${s.wins}W / ${s.losses}L / ${s.breakeven}BE`} variant={s.win_rate >= 50 ? 'profit' : 'loss'} accent="#22C55E" />
-        <KpiCard icon={<Zap size={11} />} label="Expectancy" value={`$${sf(s.expectancy)}`}
+        <KpiCard icon={<Zap size={11} />} label="Expectancy" value={<CountUp start={0} end={s.expectancy} duration={1.2} decimals={2} prefix="$" separator="," />}
           sub={`Win $${sf(s.avg_win)} · Loss $${sf(s.avg_loss)}`} variant={s.expectancy >= 0 ? 'profit' : 'loss'} accent="#F59E0B" />
       </motion.div>
 

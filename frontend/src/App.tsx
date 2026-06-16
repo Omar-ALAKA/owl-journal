@@ -1,7 +1,8 @@
-// App.tsx — Root avec lazy loading + Suspense
+// App.tsx — Root avec QueryClient amélioré + Toast + ErrorBoundary
 import { Suspense, lazy, Component, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
 import { useState } from 'react';
 import { Sidebar } from './components/layout/sidebar';
 
@@ -52,7 +53,11 @@ function PageLoader() {
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 15000, retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
   },
 });
 
@@ -61,6 +66,21 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: '#141828',
+                color: '#F1F5F9',
+                border: '1px solid #252840',
+                borderRadius: '10px',
+                fontSize: '13px',
+              },
+              success: { iconTheme: { primary: '#22C55E', secondary: '#141828' }},
+              error: { iconTheme: { primary: '#EF4444', secondary: '#141828' }},
+            }}
+          />
           <div className="app-layout">
             <Sidebar />
             <main className="main-content">
