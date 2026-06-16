@@ -1,10 +1,17 @@
 // routes/settings.tsx
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { rebuildEquity, fetchAccounts } from '../lib/api';
-import type { Account } from '../types';
-import { Settings, Database, RefreshCw, Check, Globe, Clock } from 'lucide-react';
+import { rebuildEquity, fetchAccounts, updateSessionConfig, fetchAccount } from '../lib/api';
+import type { Account, SessionConfig } from '../types';
+import { Settings, Database, RefreshCw, Check, Globe, Clock, Save } from 'lucide-react';
 import { useTimezoneStore, getTimezoneOffset, getEffectiveTzName, formatOffset, getCurrentSession, TZ_OPTIONS, type TimezoneCode } from '../stores/timezone';
+
+const DEFAULT_SESSIONS: SessionConfig = {
+  Asia: { start: 0, end: 8 },
+  London: { start: 8, end: 12 },
+  "New York": { start: 13, end: 21 },
+  "Late NY": { start: 22, end: 23 },
+};
 
 // Group options for optgroup
 const groupedOptions = TZ_OPTIONS.reduce((acc, opt) => {
@@ -18,6 +25,9 @@ export function SettingsPage() {
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildResult, setRebuildResult] = useState<string | null>(null);
   const [rebuildAccountId, setRebuildAccountId] = useState<number>(0);
+  const [selectedAccountId, setSelectedAccountId] = useState<number>(0);
+  const [localSessions, setLocalSessions] = useState<SessionConfig>(DEFAULT_SESSIONS);
+  const [sessionsSaved, setSessionsSaved] = useState(false);
 
   const { timezone, setTimezone } = useTimezoneStore();
   const offset = getTimezoneOffset(timezone);
@@ -29,6 +39,47 @@ export function SettingsPage() {
     queryFn: () => fetchAccounts().catch(() => ({ accounts: [] })),
   });
   const accounts: Account[] = accountsData?.accounts || [];
+
+  // Load session config from selected account
+  const handleAccountSelect = async (id: number) => {
+    setSelectedAccountId(id);
+    setSessionsSaved(false);
+    if (id === 0) {
+      setLocalSessions(DEFAULT_SESSIONS);
+      return;
+    }
+    try {
+      const acc = await fetchAccount(id);
+      if (acc.session_hours) {
+        setLocalSessions(acc.session_hours as SessionConfig);
+      } else {
+        setLocalSessions(DEFAULT_SESSIONS);
+      }
+    } catch {
+      setLocalSessions(DEFAULT_SESSIONS);
+    }
+  };
+
+  const handleSessionChange = (name: string, field: 'start' | 'end', value: number) => {
+    setSessionsSaved(false);
+    setLocalSessions(prev => ({
+      ...prev,
+      [name]: { ...prev[name as keyof SessionConfig]!, [field]: Math.max(0, Math.min(23, value)) },
+    }));
+  };
+
+  const handleSaveSessions = async () => {
+    if (selectedAccountId === 0) {
+      // Save to all accounts
+      for (const acc of accounts) {
+        await updateSessionConfig(acc.id, localSessions);
+      }
+    } else {
+      await updateSessionConfig(selectedAccountId, localSessions);
+    }
+    setSessionsSaved(true);
+    qc.invalidateQueries({ queryKey: ['accounts'] });
+  };
 
   const handleRebuild = async () => {
     const target = rebuildAccountId === 0 ? 'all accounts' : (accounts.find(a => a.id === rebuildAccountId)?.name || `account ${rebuildAccountId}`);
@@ -55,14 +106,6 @@ export function SettingsPage() {
   const handleTimezoneChange = (tz: TimezoneCode) => {
     setTimezone(tz);
   };
-
-  // Session times display based on selected timezone
-  const sessionTimes = [
-    { name: 'Asia', start: 0, end: 9 },
-    { name: 'London', start: 9, end: 12 },
-    { name: 'New York', start: 12, end: 17 },
-    { name: 'Late NY', start: 17, end: 21 },
-  ];
 
   return (
     <div className="page">
@@ -109,27 +152,95 @@ export function SettingsPage() {
           </span>
         </div>
 
-        {/* Session schedule */}
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-text-muted)' }}>
-            Session Schedule — Local Time → UTC
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-            {sessionTimes.map(s => (
-              <div key={s.name} style={{
-                padding: '10px 12px', background: 'rgba(255,255,255,0.03)',
-                borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)',
+        </div>
+
+      {/* ── Session Configuration ── */}
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <Clock size={18} color="var(--color-accent)" />
+          <div className="card-title" style={{ margin: 0 }}>Session Configuration</div>
+        </div>
+        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+          Define session hours in your local timezone ({tzName} {formatOffset(offset)}).
+          Sessions are automatically converted to UTC for trade analysis.
+        </p>
+
+        {/* Account selector */}
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <label className="form-label">Apply to Account</label>
+          <select
+            className="form-select"
+            value={selectedAccountId}
+            onChange={e => handleAccountSelect(Number(e.target.value))}
+          >
+            <option value={0}>All accounts (default)</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name} ({a.broker || 'no broker'})</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Session editors */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+          {Object.entries(localSessions).map(([name, cfg]) => {
+            if (!cfg) return null;
+            const utcStart = ((cfg.start - offset) % 24 + 24) % 24;
+            const utcEnd = ((cfg.end - offset) % 24 + 24) % 24;
+            return (
+              <div key={name} style={{
+                padding: '14px 16px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.08)',
               }}>
-                <div style={{ fontSize: '12px', fontWeight: 600 }}>{s.name}</div>
-                <div style={{ fontSize: '13px', color: 'var(--color-accent)', marginTop: '2px' }}>
-                  {String(s.start).padStart(2, '0')}:00 — {String(s.end).padStart(2, '0')}:00
+                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-accent)', display: 'inline-block' }} />
+                  {name}
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                  UTC {String((s.start - offset + 24) % 24).padStart(2, '0')}:00 — {String((s.end - offset + 24) % 24).padStart(2, '0')}:00
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block', marginBottom: '2px' }}>Start</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={cfg.start}
+                      onChange={e => handleSessionChange(name, 'start', Number(e.target.value))}
+                      className="form-input"
+                      style={{ padding: '4px 8px', fontSize: '13px', textAlign: 'center' }}
+                    />
+                  </div>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '12px', marginTop: '12px' }}>→</span>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block', marginBottom: '2px' }}>End</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={cfg.end}
+                      onChange={e => handleSessionChange(name, 'end', Number(e.target.value))}
+                      className="form-input"
+                      style={{ padding: '4px 8px', fontSize: '13px', textAlign: 'center' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '6px', textAlign: 'center' }}>
+                  UTC: {String(utcStart).padStart(2, '0')}:00 → {String(utcEnd).padStart(2, '0')}:00
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button className="btn btn-primary" onClick={handleSaveSessions}>
+            <Save size={16} /> Save Session Config
+          </button>
+          {sessionsSaved && (
+            <span style={{ fontSize: '13px', color: 'var(--color-profit)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={14} /> Saved!
+            </span>
+          )}
         </div>
       </div>
 

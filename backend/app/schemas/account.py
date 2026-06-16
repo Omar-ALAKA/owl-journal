@@ -6,6 +6,14 @@ from typing import Optional
 from datetime import datetime
 
 
+class SessionConfig(BaseModel):
+    """Session hours configuration — hours are in the user's local timezone."""
+    Asia: Optional[dict] = None      # {"start": 0, "end": 8}
+    London: Optional[dict] = None    # {"start": 8, "end": 12}
+    New_York: Optional[dict] = None  # {"start": 13, "end": 21}
+    Late_NY: Optional[dict] = None   # {"start": 22, "end": 23}
+
+
 class AccountBase(BaseModel):
     name: str
     broker: Optional[str] = None
@@ -39,6 +47,7 @@ class AccountUpdate(BaseModel):
     max_drawdown_pct: Optional[float] = None
     daily_loss_pct: Optional[float] = None
     personal_target_pct: Optional[float] = None
+    session_hours: Optional[dict] = None
     notes: Optional[str] = None
 
 

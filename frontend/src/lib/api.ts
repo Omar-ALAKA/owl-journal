@@ -85,6 +85,11 @@ export const createAccount = (data: Partial<Account>) =>
 export const updateAccount = (id: number, data: Partial<Account>) =>
   put<Account>(`/accounts/${id}`, data);
 
+export const updateSessionConfig = (id: number, data: Record<string, { start: number; end: number } | undefined>) =>
+  put<{ message: string; session_hours: Record<string, { start: number; end: number }> }>(
+    `/accounts/${id}/sessions`, data as Record<string, { start: number; end: number }>
+  );
+
 export const deleteAccount = (id: number) =>
   del<{ message: string; id: number }>(`/accounts/${id}`);
 

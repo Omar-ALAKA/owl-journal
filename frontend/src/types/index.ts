@@ -47,11 +47,20 @@ export interface Account {
   max_drawdown_pct: number;
   daily_loss_pct: number;
   min_trading_days?: number;
-  session_hours?: string;
+  session_hours?: Record<string, { start: number; end: number }>;
+  personal_target_pct?: number;
   rules?: Record<string, unknown>;
   notes?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SessionConfig {
+  Asia: { start: number; end: number };
+  London: { start: number; end: number };
+  "New York": { start: number; end: number };
+  "Late NY"?: { start: number; end: number };
+  [key: string]: { start: number; end: number } | undefined;
 }
 
 export interface EquityPoint {

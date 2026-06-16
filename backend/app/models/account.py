@@ -26,7 +26,12 @@ class Account(Base):
     max_drawdown_pct = Column(Numeric(5, 2), default=7)
     daily_loss_pct = Column(Numeric(5, 2), default=5)
     min_trading_days = Column(Integer, default=0)
-    session_hours = Column(Text, default="{}")
+    session_hours = Column(JSONB, default={
+        "Asia": {"start": 0, "end": 8},
+        "London": {"start": 8, "end": 12},
+        "New York": {"start": 13, "end": 21},
+        "Late NY": {"start": 22, "end": 23},
+    })
     rules = Column(JSONB, default={})
     # Funded-specific: personal objective (not imposed by prop firm)
     personal_target_pct = Column(Numeric(5, 2), default=5)

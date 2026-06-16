@@ -38,10 +38,10 @@ export function SessionsPage() {
   useEffect(() => {
     if (!activeAccount) return;
     try {
-      const saved = activeAccount.session_hours ? JSON.parse(activeAccount.session_hours) : null;
+      const saved = activeAccount.session_hours;
       if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
         const merged = DEFAULT_SESSIONS.map(def => {
-          const savedEntry = saved[def.name];
+          const savedEntry = (saved as Record<string, { start: number; end: number }>)[def.name];
           if (savedEntry && typeof savedEntry === 'object') {
             return { ...def, start: savedEntry.start ?? def.start, end: savedEntry.end ?? def.end };
           }
@@ -66,7 +66,7 @@ export function SessionsPage() {
       sessionConfig[s.name] = { start: s.start, end: s.end };
     }
     try {
-      await updateAccount(activeAccount.id, { session_hours: JSON.stringify(sessionConfig) });
+      await updateAccount(activeAccount.id, { session_hours: sessionConfig });
       qc.invalidateQueries({ queryKey: ['accounts'] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

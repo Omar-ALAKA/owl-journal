@@ -162,26 +162,25 @@ def local_to_utc(local_dt: datetime, offset_hours: float) -> datetime:
     return local_dt - timedelta(hours=offset_hours)
 
 
-def get_session_for_time(utc_dt: datetime, offset_hours: float) -> str:
-    """Determine trading session based on UTC time and offset.
+def get_session_for_time(utc_dt: datetime, offset_hours: float = 0) -> str:
+    """Determine trading session based on UTC time.
 
-    Sessions are defined in LOCAL time:
-    - Asia:     00:00 - 08:59
-    - London:   09:00 - 11:59
-    - New York: 12:00 - 16:59
-    - Late NY:  17:00 - 20:59
-    - Off-hours: 21:00 - 23:59
+    Sessions are defined in FIXED UTC hours (market hours don't change with DST):
+    - Asia:     00:00 - 07:59 UTC (Tokyo/Sydney)
+    - London:   08:00 - 12:59 UTC
+    - New York: 13:00 - 21:59 UTC
+    - Off-hours: 22:00 - 23:59 UTC
+
+    The offset_hours parameter is kept for backward compatibility but
+    session boundaries are always in UTC.
     """
-    local = utc_to_local(utc_dt, offset_hours)
-    hour = local.hour
-    if 0 <= hour < 9:
+    hour = utc_dt.hour
+    if 0 <= hour < 8:
         return "Asia"
-    elif 9 <= hour < 12:
+    elif 8 <= hour < 13:
         return "London"
-    elif 12 <= hour < 17:
+    elif 13 <= hour < 22:
         return "New York"
-    elif 17 <= hour < 21:
-        return "Late NY"
     else:
         return "Off-hours"
 

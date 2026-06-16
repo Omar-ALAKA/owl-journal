@@ -97,7 +97,30 @@ async def update_account(account_id: int, data: AccountUpdate, db: AsyncSession 
     return model_to_dict(account)
 
 
-@router.delete("/{account_id}")
+@router.put("/{account_id}/sessions")
+async def update_session_config(account_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    """Update session hours configuration for an account.
+
+    Expected payload:
+    {
+        "Asia": {"start": 0, "end": 8},
+        "London": {"start": 8, "end": 12},
+        "New York": {"start": 13, "end": 21},
+        "Late NY": {"start": 22, "end": 23}
+    }
+    Hours are in the user's local timezone.
+    """
+    from app.services.session_config import validate_session_config
+
+    result = await db.execute(select(Account).where(Account.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    validated = validate_session_config(data)
+    account.session_hours = validated
+    await db.flush()
+    return {"message": "Session config updated", "session_hours": validated}
 async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Account).where(Account.id == account_id))
     account = result.scalar_one_or_none()

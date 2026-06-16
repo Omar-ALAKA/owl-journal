@@ -243,7 +243,7 @@ def _cell_to_str(cell: Any) -> str:
     return str(cell).strip()
 
 
-def _parse_csv_content(content: str, tz_code: str = "UTC") -> list[dict]:
+def _parse_csv_content(content: str, tz_code: str = "UTC", session_config: dict | None = None) -> list[dict]:
     """Parse CSV content and return list of trade dicts."""
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
@@ -292,23 +292,22 @@ def _parse_csv_content(content: str, tz_code: str = "UTC") -> list[dict]:
         notes = get("notes")
         ticket = get("ticket")
 
-        # Auto-detect session from open_time using timezone
+        # Auto-detect session from open_time using timezone + user session config
         if not session and open_time:
             try:
-                from app.services.timezone import get_offset, get_session_for_time
+                from app.services.timezone import get_offset
+                from app.services.session_config import get_session_for_time
                 offset = get_offset(tz_code, open_time)
-                session = get_session_for_time(open_time, offset)
+                session = get_session_for_time(open_time, offset, session_config)
             except Exception:
                 # Fallback: detect session from UTC hour
                 h = open_time.hour
-                if 0 <= h < 9:
+                if 0 <= h < 8:
                     session = "Asia"
-                elif 9 <= h < 12:
+                elif 8 <= h < 13:
                     session = "London"
-                elif 12 <= h < 17:
+                elif 13 <= h < 22:
                     session = "New York"
-                elif 17 <= h < 21:
-                    session = "Late NY"
                 else:
                     session = "Off-hours"
 
@@ -340,7 +339,7 @@ def _parse_csv_content(content: str, tz_code: str = "UTC") -> list[dict]:
     return trades
 
 
-def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC") -> list[dict]:
+def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC", session_config: dict | None = None) -> list[dict]:
     """Parse XLSX content directly using openpyxl.
 
     Handles multi-section MT5 exports (Positions / Orders / Deals)
@@ -450,23 +449,22 @@ def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC") -> list[dict
             notes = get("notes")
             ticket = get("ticket")
 
-            # Auto-detect session from open_time using timezone
+            # Auto-detect session from open_time using timezone + user session config
             if not session and open_time:
                 try:
-                    from app.services.timezone import get_offset, get_session_for_time
+                    from app.services.timezone import get_offset
+                    from app.services.session_config import get_session_for_time
                     offset = get_offset(tz_code, open_time)
-                    session = get_session_for_time(open_time, offset)
+                    session = get_session_for_time(open_time, offset, session_config)
                 except Exception:
                     # Fallback: detect session from UTC hour
                     h = open_time.hour
-                    if 0 <= h < 9:
+                    if 0 <= h < 8:
                         session = "Asia"
-                    elif 9 <= h < 12:
+                    elif 8 <= h < 13:
                         session = "London"
-                    elif 12 <= h < 17:
+                    elif 13 <= h < 22:
                         session = "New York"
-                    elif 17 <= h < 21:
-                        session = "Late NY"
                     else:
                         session = "Off-hours"
 
@@ -529,6 +527,22 @@ async def preview_import(
     if len(content_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 10MB)")
 
+    # Get session config from account if available
+    session_config = None
+    account_info = None
+    if account_id:
+        acc_result = await db.execute(
+            select(Account).where(Account.id == account_id)
+        )
+        acc = acc_result.scalar_one_or_none()
+        if acc:
+            session_config = acc.session_hours
+            account_info = {
+                "id": acc.id,
+                "name": acc.name,
+                "broker": acc.broker,
+            }
+
     if filename.endswith(".csv") or filename.endswith(".txt"):
         for encoding in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
             try:
@@ -538,11 +552,11 @@ async def preview_import(
                 continue
         else:
             raise HTTPException(400, detail="Unable to decode file")
-        trades = _parse_csv_content(content, tz_code=tz_code)
+        trades = _parse_csv_content(content, tz_code=tz_code, session_config=session_config)
 
     elif filename.endswith((".xlsx", ".xls")):
         try:
-            trades = _parse_xlsx_content(content_bytes, tz_code=tz_code)
+            trades = _parse_xlsx_content(content_bytes, tz_code=tz_code, session_config=session_config)
         except ImportError:
             raise HTTPException(
                 500,
@@ -554,18 +568,7 @@ async def preview_import(
             detail="Unsupported file format. Use .csv, .txt, .xlsx, or .xls",
         )
 
-    account_info = None
-    if account_id:
-        acc_result = await db.execute(
-            select(Account).where(Account.id == account_id)
-        )
-        acc = acc_result.scalar_one_or_none()
-        if acc:
-            account_info = {
-                "id": acc.id,
-                "name": acc.name,
-                "broker": acc.broker,
-            }
+    account_info = account_info or None
 
     total = len(trades)
     detected_format = trades[0]["detected_format"] if trades else "unknown"

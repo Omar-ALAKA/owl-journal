@@ -29,8 +29,9 @@ export const TZ_OPTIONS: TimezoneOption[] = [
   { value: 'CET', label: 'CET (UTC+1) — Paris / Berlin', group: 'Europe', hasDst: true },
   { value: 'EET', label: 'EET (UTC+2) — Athens', group: 'Europe', hasDst: true },
   // Africa
-  { value: 'WAT', label: 'WAT (UTC+1) — West Africa (Lomé)', group: 'Africa', hasDst: false },
-  // Asia
+  { value: 'GMT', label: 'GMT (UTC+0) — West Africa (Lomé, Accra, Dakar)', group: 'Africa', hasDst: false },
+  { value: 'WAT', label: 'WAT (UTC+1) — West Africa (Lagos, Kinshasa)', group: 'Africa', hasDst: false },
+  { value: 'UTC', label: 'UTC (UTC+0)', group: 'Other', hasDst: false },
   { value: 'IST', label: 'IST (UTC+5:30) — India', group: 'Asia', hasDst: false },
   { value: 'HKT', label: 'HKT (UTC+8) — Hong Kong', group: 'Asia', hasDst: false },
   { value: 'SGT', label: 'SGT (UTC+8) — Singapore', group: 'Asia', hasDst: false },
@@ -181,11 +182,11 @@ export function formatLocalTime(utcDateStr: string, offsetHours: number, fmt?: s
 }
 
 export function getSessionForTime(utcHour: number, offsetHours: number): string {
-  const localHour = ((utcHour + offsetHours) % 24 + 24) % 24;
-  if (localHour >= 0 && localHour < 9) return 'Asia';
-  if (localHour >= 9 && localHour < 12) return 'London';
-  if (localHour >= 12 && localHour < 17) return 'New York';
-  if (localHour >= 17 && localHour < 21) return 'Late NY';
+  // Sessions are in FIXED UTC hours (market hours don't change with DST)
+  // Asia: 00-07, London: 08-12, New York: 13-21, Off-hours: 22-23
+  if (utcHour >= 0 && utcHour < 8) return 'Asia';
+  if (utcHour >= 8 && utcHour < 13) return 'London';
+  if (utcHour >= 13 && utcHour < 22) return 'New York';
   return 'Off-hours';
 }
 
@@ -204,7 +205,7 @@ interface TimezoneState {
 export const useTimezoneStore = create<TimezoneState>()(
   persist(
     (set) => ({
-      timezone: 'AUTO',
+      timezone: 'EST',
       setTimezone: (tz) => set({ timezone: tz }),
     }),
     { name: 'owl-timezone' }
