@@ -1,13 +1,61 @@
 // routes/trades.tsx
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchTrades, deleteTrade, fetchAccounts, updateTrade } from '../lib/api';
 import type { Trade, Account } from '../types';
 import { Trash2, Filter, X, Edit2 } from 'lucide-react';
-
 import { sf, pnl as fmtPnl, rfmt as fmtR } from '../lib/safe';
-// sf is already named sf, keep backward-compatible alias
 const fmt = sf;
+
+// Custom Select component (shadcn-style without the dependency)
+function CustomSelect({ value, onChange, options, placeholder }: {
+  value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selected = options.find(o => o.value === value);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', padding: '8px 12px', background: 'var(--color-bg-base)',
+          border: '1px solid var(--color-border)', borderRadius: 8,
+          color: 'var(--color-text-primary)', fontSize: 13, textAlign: 'left',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <span>{selected?.label || placeholder || 'Select...'}</span>
+        <span style={{ opacity: 0.5 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 8, marginTop: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+        }}>
+          {options.map(o => (
+            <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
+              style={{
+                width: '100%', padding: '8px 12px', background: o.value === value ? 'var(--color-accent-soft)' : 'transparent',
+                color: o.value === value ? 'var(--color-accent)' : 'var(--color-text-primary)',
+                border: 'none', textAlign: 'left', fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TradesPage() {
   const qc = useQueryClient();
@@ -159,10 +207,10 @@ export function TradesPage() {
                       </span>
                     </td>
                     <td>{fmt(t.volume, 2)}</td>
-                    <td>{fmt(t.entry_price, 4)}</td>
-                    <td>{fmt(t.exit_price, 4)}</td>
-                    <td>{fmt(t.sl_price, 4)}</td>
-                    <td>{fmt(t.tp_price, 4)}</td>
+                    <td className="col-price">{sf(t.entry_price, 2)}</td>
+                    <td className="col-price">{sf(t.exit_price, 2)}</td>
+                    <td className="col-price">{sf(t.sl_price, 2)}</td>
+                    <td className="col-price">{sf(t.tp_price, 2)}</td>
                     <td className={t.profit >= 0 ? 'text-green' : 'text-red'} style={{ fontWeight: 600 }}>
                       {fmtPnl(t.profit)}
                     </td>
@@ -209,10 +257,8 @@ export function TradesPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Direction</label>
-                <select className="form-select" value={editForm.direction || 'long'} onChange={e => setEditForm({ ...editForm, direction: e.target.value as 'long' | 'short' })}>
-                  <option value="long">Long</option>
-                  <option value="short">Short</option>
-                </select>
+                <CustomSelect value={editForm.direction || 'long'} onChange={v => setEditForm({ ...editForm, direction: v as 'long' | 'short' })}
+                  options={[{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }]} />
               </div>
             </div>
             <div className="form-row">
@@ -272,13 +318,15 @@ export function TradesPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Session</label>
-                <select className="form-select" value={editForm.session || ''} onChange={e => setEditForm({ ...editForm, session: e.target.value })}>
-                  <option value="">-</option>
-                  <option value="Asia">Asia</option>
-                  <option value="London">London</option>
-                  <option value="New York">New York</option>
-                  <option value="Late NY">Late NY</option>
-                </select>
+                <CustomSelect value={editForm.session || ''} onChange={v => setEditForm({ ...editForm, session: v })}
+                  options={[
+                    { value: '', label: '-' },
+                    { value: 'Asia', label: 'Asia' },
+                    { value: 'London', label: 'London' },
+                    { value: 'New York', label: 'New York' },
+                    { value: 'London/NY', label: 'London/NY' },
+                    { value: 'Other', label: 'Other' },
+                  ]} placeholder="-" />
               </div>
             </div>
             <div className="form-row">

@@ -65,7 +65,7 @@ export function AnalyticsPage() {
                 <div className="card-title">Net P&L by Session</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={sessions.map(s => ({ name: s.session, pnl: +s.net_profit.toFixed(2) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 12 }} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
                     <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
@@ -107,7 +107,7 @@ export function AnalyticsPage() {
                 <div className="card-title">Net P&L by Setup</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={setups.slice(0, 10).map(s => ({ name: s.setup, pnl: +s.net_profit.toFixed(2) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 11 }} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
                     <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
@@ -155,7 +155,7 @@ export function AnalyticsPage() {
                 <div className="card-title">R-Multiple Distribution</div>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={rBuckets.map(b => ({ name: b.label, count: b.count, profit: +b.profit.toFixed(2) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
                     <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
