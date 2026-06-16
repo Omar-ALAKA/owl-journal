@@ -66,24 +66,44 @@ export function AccountsPage() {
         <div className="empty-state"><p>No accounts yet. Create your first account!</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {accounts.map(a => (
-            <div key={a.id} className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.name}</div>
-                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                  {a.broker || 'No broker'} · {a.account_type} {a.phase ? `· ${a.phase}` : ''} · <span className={a.status === 'active' ? 'text-green' : 'text-muted'}>{a.status}</span>
+          {accounts.map(a => {
+            const badgeColor = a.account_type === 'funded' ? '#E8A838' : a.account_type === 'challenge' ? '#7C5CFC' : '#22C55E';
+            const balance = a.current_balance ?? 0;
+            const starting = a.starting_balance ?? 0;
+            const hasTrades = balance !== 0 || starting !== 0;
+            const progressPct = starting > 0 ? Math.min(100, (balance / starting) * 100) : 0;
+            return (
+              <div key={a.id} className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '15px' }}>{a.name}</span>
+                    <span className="badge" style={{ background: badgeColor + '22', color: badgeColor, fontSize: '10px', padding: '1px 8px' }}>{a.account_type}</span>
+                    <span className={a.status === 'active' ? 'text-green' : 'text-muted'} style={{ fontSize: '12px' }}>{a.status}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    {a.broker || 'No broker'} {a.phase ? `· ${a.phase}` : ''}
+                  </div>
+                  {hasTrades ? (
+                    <div style={{ marginTop: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>${balance.toFixed(2)}</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>from ${starting.toFixed(2)}</span>
+                      </div>
+                      <div style={{ height: '4px', background: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${progressPct}%`, background: balance >= starting ? 'var(--color-profit)' : 'var(--color-loss)', borderRadius: '2px', transition: 'width .3s' }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--color-text-muted)' }}>Aucun trade importé</div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '4px', marginLeft: '16px' }}>
+                  <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--color-text-secondary)', padding: '4px 8px' }} onClick={() => openEdit(a)}><Edit2 size={14} /></button>
+                  <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--color-loss)', padding: '4px 8px', opacity: 0.5 }} onClick={() => handleDelete(a.id)}><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px' }}>${(a.current_balance ?? 0).toFixed(2)}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>from ${(a.starting_balance ?? 0).toFixed(2)}</div>
-                </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => openEdit(a)}><Edit2 size={14} /></button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id)}><Trash2 size={14} /></button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

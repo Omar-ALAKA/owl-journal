@@ -72,23 +72,37 @@ export function JournalPage() {
               <AreaChart data={equityPoints.map(p => ({ ...p, equity: Number(p.equity) || 0 }))}>
                 <defs>
                   <linearGradient id="eqGrad2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#E8A838" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#E8A838" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#7C5CFC" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#7C5CFC" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="timestamp" tick={{ fill: '#7B8498', fontSize: 11 }} tickFormatter={(v: string) => v?.split('T')[0]?.slice(5) || ''} />
-                <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: '#1E2433', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-                <Area type="monotone" dataKey="equity" stroke="#E8A838" fill="url(#eqGrad2)" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="timestamp" tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} tickFormatter={(v: string) => v?.split('T')[0]?.slice(5) || ''} />
+                <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
+                <Area type="monotone" dataKey="equity" stroke="#7C5CFC" fill="url(#eqGrad2)" strokeWidth={2.5} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        ) : <div className="empty-state"><p>No equity data yet.</p></div>
+        ) : (
+          <div className="empty-state">
+            <div style={{ fontSize: 48, marginBottom: 12, color: 'var(--color-accent)' }}>📊</div>
+            <h3 style={{ marginBottom: 8, color: 'var(--color-text-primary)' }}>Aucune donnée pour cette période</h3>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 20 }}>Importez des trades pour voir vos stats</p>
+            <a href="/import" className="btn btn-primary">→ Importer</a>
+          </div>
+        )
       )}
 
       {tab === 'sessions' && (
-        sessions.length === 0 ? <div className="empty-state"><p>No session data yet.</p></div> : (
+        sessions.length === 0 ? (
+          <div className="empty-state">
+            <div style={{ fontSize: 48, marginBottom: 12, color: 'var(--color-accent)' }}>📊</div>
+            <h3 style={{ marginBottom: 8, color: 'var(--color-text-primary)' }}>Aucune donnée pour cette période</h3>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 20 }}>Importez des trades pour voir vos stats</p>
+            <a href="/import" className="btn btn-primary">→ Importer</a>
+          </div>
+        ) : (
           <table className="trade-table">
             <thead><tr><th>Session</th><th>Trades</th><th>W/L</th><th>Win Rate</th><th>Net P&L</th><th>Avg P&L</th><th>Avg R</th><th>Best</th><th>Worst</th><th>Comm + Swap</th></tr></thead>
             <tbody>
@@ -145,7 +159,14 @@ export function JournalPage() {
       )}
 
       {tab === 'daily' && (
-        daily.length === 0 ? <div className="empty-state"><p>No daily stats yet.</p></div> : (
+        daily.length === 0 ? (
+          <div className="empty-state">
+            <div style={{ fontSize: 48, marginBottom: 12, color: 'var(--color-accent)' }}>📊</div>
+            <h3 style={{ marginBottom: 8, color: 'var(--color-text-primary)' }}>Aucune donnée pour cette période</h3>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 20 }}>Importez des trades pour voir vos stats</p>
+            <a href="/import" className="btn btn-primary">→ Importer</a>
+          </div>
+        ) : (
           <table className="trade-table">
             <thead><tr><th>Date</th><th>Trades</th><th>W/L</th><th>Win Rate</th><th>Net P&L</th><th>Gross P</th><th>Gross L</th><th>PF</th></tr></thead>
             <tbody>

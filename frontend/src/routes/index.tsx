@@ -35,12 +35,14 @@ function useDashboardData() {
   return { stats: s.data ?? EMPTY_STATS, points: e.data?.points ?? [] as EquityPoint[], accounts: a.data?.accounts ?? [] as Account[], loading: s.isLoading || e.isLoading };
 }
 
-function KpiCard({ icon, label, value, sub, variant }: {
-  icon: React.ReactNode; label: string; value: string; sub: string; variant?: 'profit' | 'loss' | 'accent';
+function KpiCard({ icon, label, value, sub, variant, accent }: {
+  icon: React.ReactNode; label: string; value: string; sub: string; variant?: 'profit' | 'loss' | 'accent'; accent?: string;
 }) {
+  const borderLeft = accent ? `3px solid ${accent}` : undefined;
   return (
     <motion.div
       className="stat-card"
+      style={{ borderLeft }}
       variants={cardVariants}
       whileHover={{ scale: 1.02 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
@@ -88,13 +90,13 @@ export function DashboardPage() {
 
       <motion.div className="kpi-grid stagger" variants={sectionVariants} initial="hidden" animate="visible">
         <KpiCard icon={<DollarSign size={11} />} label="Net P&L" value={pnl(s.net_profit)}
-          sub={`${pnl(s.gross_profit)} profit · ${pnl(s.gross_loss)} loss`} variant={s.net_profit >= 0 ? 'profit' : 'loss'} />
+          sub={`${pnl(s.gross_profit)} profit · ${pnl(s.gross_loss)} loss`} variant={s.net_profit >= 0 ? 'profit' : 'loss'} accent="#22C55E" />
         <KpiCard icon={<Target size={11} />} label="Profit Factor" value={pf}
-          sub={`Avg R: ${s.avg_r >= 0 ? '+' : ''}${sf(s.avg_r)}R`} variant={s.profit_factor >= 1 ? 'profit' : 'loss'} />
+          sub={`Avg R: ${s.avg_r >= 0 ? '+' : ''}${sf(s.avg_r)}R`} variant={s.profit_factor >= 1 ? 'profit' : 'loss'} accent="#7C5CFC" />
         <KpiCard icon={<Activity size={11} />} label="Win Rate" value={pct(s.win_rate)}
-          sub={`${s.wins}W / ${s.losses}L / ${s.breakeven}BE`} variant={s.win_rate >= 50 ? 'profit' : 'loss'} />
+          sub={`${s.wins}W / ${s.losses}L / ${s.breakeven}BE`} variant={s.win_rate >= 50 ? 'profit' : 'loss'} accent="#22C55E" />
         <KpiCard icon={<Zap size={11} />} label="Expectancy" value={`$${sf(s.expectancy)}`}
-          sub={`Win $${sf(s.avg_win)} · Loss $${sf(s.avg_loss)}`} variant={s.expectancy >= 0 ? 'profit' : 'loss'} />
+          sub={`Win $${sf(s.avg_win)} · Loss $${sf(s.avg_loss)}`} variant={s.expectancy >= 0 ? 'profit' : 'loss'} accent="#F59E0B" />
       </motion.div>
 
       {pts.length > 1 && (
@@ -111,8 +113,8 @@ export function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="timestamp" tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }} tickFormatter={(v: string) => v?.split('T')[0]?.slice(5) || ''} />
               <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }} tickFormatter={(v: number) => `$${(v/1000).toFixed(1)}k`} />
-              <Tooltip contentStyle={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} labelStyle={{ fill: 'var(--color-text-muted)' }} formatter={(v: any) => [`$${Number(v).toFixed(2)}`, 'Equity']} />
-              <Area type="monotone" dataKey="equity" stroke="#7C5CFC" fill="url(#eqG)" strokeWidth={2} dot={false} />
+              <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} labelStyle={{ color: 'var(--color-text-muted)' }} formatter={(v: any) => [`$${Number(v).toFixed(2)}`, 'Equity']} />
+              <Area type="monotone" dataKey="equity" stroke="#7C5CFC" fill="url(#eqG)" strokeWidth={2.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>

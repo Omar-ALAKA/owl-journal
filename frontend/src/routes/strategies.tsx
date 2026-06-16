@@ -108,15 +108,18 @@ export function StrategiesPage() {
                 ? Object.values(s.rules as Record<string, unknown>).map(String)
                 : [];
             return (
-              <div key={s.id} className="card">
+              <div key={s.id} className="card" style={{ borderLeft: '3px solid #7C5CFC', transition: 'box-shadow .25s' }}
+                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 20px rgba(124,92,252,0.15)')}
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '4px' }}>{s.name}</div>
                     <div style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>{s.description || 'No description'}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(s)}><Edit2 size={12} /></button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.id)}><Trash2 size={12} /></button>
+                    <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--color-text-secondary)', padding: '4px 8px' }} onClick={() => openEdit(s)}><Edit2 size={12} /></button>
+                    <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--color-loss)', padding: '4px 8px' }} onClick={() => handleDelete(s.id)}><Trash2 size={12} /></button>
                   </div>
                 </div>
                 {rulesList.length > 0 && (
@@ -124,6 +127,11 @@ export function StrategiesPage() {
                     Rules: {rulesList.join(', ')}
                   </div>
                 )}
+                <div style={{ marginTop: '12px', display: 'flex', gap: '16px', fontSize: '12px' }}>
+                  <div style={{ color: 'var(--color-text-muted)' }}>Win Rate: <span style={{ color: 'var(--color-profit)', fontWeight: 600 }}>—</span></div>
+                  <div style={{ color: 'var(--color-text-muted)' }}>Trades: <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>0</span></div>
+                  <div style={{ color: 'var(--color-text-muted)' }}>Avg R: <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>—</span></div>
+                </div>
               </div>
             );
           })}

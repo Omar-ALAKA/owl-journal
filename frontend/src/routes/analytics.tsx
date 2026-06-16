@@ -39,7 +39,9 @@ export function AnalyticsPage() {
   const rSummary: RSummary = rDistData?.summary || { total: 0, avg_r: 0, median_r: 0, min_r: 0, max_r: 0 };
   const dailyStats: DailyStat[] = dailyData?.daily_stats || [];
 
-  const COLORS = ['#F87171', '#F87171', '#FBBF24', '#FBBF24', '#34D399', '#34D399', '#34D399', '#34D399', '#34D399'];
+  const COLORS = ['#EF4444', '#EF4444', '#F59E0B', '#F59E0B', '#22C55E', '#22C55E', '#22C55E', '#22C55E', '#7C5CFC'];
+
+  const rDistTooltipStyle = { background: '#1C2038', border: '1px solid #3A3F6B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 };
 
   return (
     <div className="page">
@@ -66,9 +68,9 @@ export function AnalyticsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 12 }} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#1E2433', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                    <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
                     <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                      {sessions.map((s, i) => <Cell key={i} fill={s.net_profit >= 0 ? '#34D399' : '#F87171'} />)}
+                      {sessions.map((s, i) => <Cell key={i} fill={s.net_profit >= 0 ? '#22C55E' : '#EF4444'} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -108,9 +110,9 @@ export function AnalyticsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 11 }} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#1E2433', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                    <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
                     <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                      {setups.slice(0, 10).map((s, i) => <Cell key={i} fill={s.net_profit >= 0 ? '#34D399' : '#F87171'} />)}
+                      {setups.slice(0, 10).map((s, i) => <Cell key={i} fill={s.net_profit >= 0 ? '#22C55E' : '#EF4444'} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -156,8 +158,16 @@ export function AnalyticsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis dataKey="name" tick={{ fill: '#7B8498', fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
                     <YAxis tick={{ fill: '#7B8498', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#1E2433', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-                    <Bar dataKey="count" fill="#E8A838" radius={[4, 4, 0, 0]} name="Count" />
+                    <Tooltip contentStyle={{ background: 'var(--color-bg-surface-2)', border: '1px solid var(--color-border-strong)', borderRadius: 8, fontSize: 12, color: 'var(--color-text-primary)' }} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} name="Count">
+                      {rBuckets.map((b, i) => {
+                        const fill = b.label.includes('< -3') || b.label.includes('-3') ? '#EF4444'
+                          : b.label.includes('-2') || b.label.includes('-1') ? '#F59E0B'
+                          : b.label.includes('> 3') ? '#7C5CFC'
+                          : '#22C55E';
+                        return <Cell key={i} fill={fill} />;
+                      })}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -174,19 +184,22 @@ export function AnalyticsPage() {
             <table className="trade-table">
               <thead><tr><th>Date</th><th>Trades</th><th>W/L</th><th>Win Rate</th><th>Net P&L</th><th>Gross Profit</th><th>Gross Loss</th><th>PF</th><th>Avg R</th></tr></thead>
               <tbody>
-                {dailyStats.map((d, i) => (
-                  <tr key={i}>
-                    <td>{d.date}</td>
-                    <td>{d.trades}</td>
-                    <td>{d.wins}/{d.losses}</td>
-                    <td>{d.win_rate}%</td>
-                    <td className={d.net_profit >= 0 ? 'text-green' : 'text-red'}>{d.net_profit >= 0 ? '+' : ''}${d.net_profit.toFixed(2)}</td>
-                    <td className="text-green">${d.gross_profit.toFixed(2)}</td>
-                    <td className="text-red">${d.gross_loss.toFixed(2)}</td>
-                    <td>{d.profit_factor}</td>
-                    <td className={d.avg_r >= 0 ? 'text-green' : 'text-red'}>{d.avg_r}R</td>
-                  </tr>
-                ))}
+                {dailyStats.map((d, i) => {
+                  const wrColor = d.win_rate >= 60 ? 'var(--color-profit)' : d.win_rate >= 40 ? 'var(--color-warning)' : 'var(--color-loss)';
+                  return (
+                    <tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
+                      <td>{d.date}</td>
+                      <td>{d.trades}</td>
+                      <td>{d.wins}/{d.losses}</td>
+                      <td style={{ color: wrColor, fontWeight: 700 }}>{d.win_rate}%</td>
+                      <td style={{ color: d.net_profit >= 0 ? 'var(--color-profit)' : 'var(--color-loss)', fontWeight: 700 }}>{d.net_profit >= 0 ? '+' : ''}${d.net_profit.toFixed(2)}</td>
+                      <td className="text-green">${d.gross_profit.toFixed(2)}</td>
+                      <td className="text-red">${d.gross_loss.toFixed(2)}</td>
+                      <td>{d.profit_factor}</td>
+                      <td className={d.avg_r >= 0 ? 'text-green' : 'text-red'}>{d.avg_r}R</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

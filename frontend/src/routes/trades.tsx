@@ -196,7 +196,7 @@ export function TradesPage() {
 
       {/* Edit Trade Modal */}
       {editingTrade && (
-        <div className="modal-overlay" onClick={() => setEditingTrade(null)}>
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(4px)' }} onClick={() => setEditingTrade(null)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2>Edit Trade #{editingTrade.id}</h2>
@@ -289,13 +289,13 @@ export function TradesPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Notes</label>
-              <input className="form-input" value={editForm.notes || ''} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+              <textarea className="form-input" style={{ minHeight: 80, fontSize: 13 }} value={editForm.notes || ''} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', marginTop: '20px' }}>
-              <button className="btn btn-danger" onClick={() => { handleDelete(editingTrade.id); setEditingTrade(null); }}><Trash2 size={14} /> Delete</button>
+              <button className="btn" style={{ background: 'transparent', color: 'var(--color-loss)', border: '1px solid var(--color-loss)' }} onClick={() => { handleDelete(editingTrade.id); setEditingTrade(null); }}><Trash2 size={14} /> Delete</button>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button className="btn btn-secondary" onClick={() => setEditingTrade(null)}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleSaveEdit}>Save</button>
+                <button className="btn btn-primary" onClick={handleSaveEdit} style={{ transition: 'transform .15s' }}>Save</button>
               </div>
             </div>
           </div>
