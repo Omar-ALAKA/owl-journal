@@ -294,10 +294,24 @@ def _parse_csv_content(content: str) -> list[dict]:
 
         # Auto-detect session from open_time using request timezone
         if not session and open_time:
-            from app.middleware.timezone_middleware import get_request_offset
-            from app.services.timezone import get_session_for_time
-            offset = get_request_offset(open_time)
-            session = get_session_for_time(open_time, offset)
+            try:
+                from app.middleware.timezone_middleware import get_request_offset
+                from app.services.timezone import get_session_for_time
+                offset = get_request_offset(open_time)
+                session = get_session_for_time(open_time, offset)
+            except Exception:
+                # Fallback: detect session from UTC hour
+                h = open_time.hour
+                if 0 <= h < 7:
+                    session = "Asia"
+                elif 7 <= h < 12:
+                    session = "London"
+                elif 12 <= h < 17:
+                    session = "New York"
+                elif 17 <= h < 21:
+                    session = "Late NY"
+                else:
+                    session = "Off-hours"
 
         if not direction and profit != 0:
             direction = "long" if profit > 0 else "short"
@@ -439,10 +453,24 @@ def _parse_xlsx_content(content_bytes: bytes) -> list[dict]:
 
             # Auto-detect session from open_time using request timezone
             if not session and open_time:
-                from app.middleware.timezone_middleware import get_request_offset
-                from app.services.timezone import get_session_for_time
-                offset = get_request_offset(open_time)
-                session = get_session_for_time(open_time, offset)
+                try:
+                    from app.middleware.timezone_middleware import get_request_offset
+                    from app.services.timezone import get_session_for_time
+                    offset = get_request_offset(open_time)
+                    session = get_session_for_time(open_time, offset)
+                except Exception:
+                    # Fallback: detect session from UTC hour
+                    h = open_time.hour
+                    if 0 <= h < 7:
+                        session = "Asia"
+                    elif 7 <= h < 12:
+                        session = "London"
+                    elif 12 <= h < 17:
+                        session = "New York"
+                    elif 17 <= h < 21:
+                        session = "Late NY"
+                    else:
+                        session = "Off-hours"
 
             if not direction and profit != 0:
                 direction = "long" if profit > 0 else "short"
