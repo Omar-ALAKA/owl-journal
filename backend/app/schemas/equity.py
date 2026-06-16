@@ -62,13 +62,18 @@ class CheckpointBase(BaseModel):
     checkpoint_type: str
     balance: float
     equity: float
-    drawdown: float = 0
+    drawdown_pct: float = 0
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
-class CheckpointCreate(CheckpointBase):
+class CheckpointCreate(BaseModel):
     account_id: int
+    checkpoint_type: str
+    balance: float
+    equity: float
+    drawdown_pct: float = 0
+    notes: Optional[str] = None
 
 
 class CheckpointResponse(CheckpointBase):

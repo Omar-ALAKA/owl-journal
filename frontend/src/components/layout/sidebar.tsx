@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Trophy, BookOpen, Clock, Calendar,
-  ArrowLeftRight, BarChart3, Target, CreditCard, Upload,
+  ArrowLeftRight, Activity, Target, CreditCard, Upload,
   Moon, Sun, Zap,
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/theme';
@@ -20,7 +20,7 @@ const navItems = [
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
   { to: '/trades', icon: ArrowLeftRight, label: 'Trades' },
   { to: '/strategies', icon: Target, label: 'Strategies' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/analytics', icon: Activity, label: 'Analytics' },
   { to: '/accounts', icon: CreditCard, label: 'Accounts' },
   { to: '/import', icon: Upload, label: 'Import' },
   { to: '/sessions', icon: Clock, label: 'Sessions' },

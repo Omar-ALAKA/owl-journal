@@ -105,7 +105,7 @@ async def calculate_kpis(account_id: int, db: AsyncSession) -> dict[str, Any]:
     net_pnl = gross_profit - gross_loss
 
     win_rate = (len(wins) / total_trades * 100) if total_trades > 0 else 0
-    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf")
+    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0.0)
 
     avg_win = (gross_profit / len(wins)) if wins else 0
     avg_loss = (gross_loss / len(losses)) if losses else 0

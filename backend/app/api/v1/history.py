@@ -42,24 +42,42 @@ async def get_history(
 
     history = []
     for acc in accounts:
-        # Stats agrégées pour ce compte
-        trade_stats_query = select(
-            func.count().label("total_trades"),
-            func.sum(case((Trade.profit > 0, 1), else_=0)).label("wins"),
-            func.sum(case((Trade.profit < 0, 1), else_=0)).label("losses"),
-            func.sum(Trade.profit).label("net_pnl"),
-            func.avg(Trade.profit).label("avg_pnl"),
-            func.max(Trade.profit).label("best_trade"),
-            func.min(Trade.profit).label("worst_trade"),
-            func.avg(Trade.r_multiple).label("avg_r_multiple"),
+        # Stats agrégées pour ce compte - fetch trades and aggregate in Python (avoids func.case + asyncpg issues)
+        trades_query = select(
+            Trade.profit,
+            Trade.r_multiple,
         ).where(
             and_(
                 Trade.account_id == acc.id,
                 Trade.close_time.isnot(None),
             )
         )
-        trade_result = await db.execute(trade_stats_query)
-        ts = trade_result.one()
+        trades_result = await db.execute(trades_query)
+        rows = trades_result.all()
+
+        total_trades = len(rows)
+        wins = sum(1 for r in rows if float(r[0] or 0) > 0)
+        losses = sum(1 for r in rows if float(r[0] or 0) < 0)
+        net_pnl = sum(float(r[0] or 0) for r in rows)
+        avg_pnl = (net_pnl / total_trades) if total_trades > 0 else 0
+        profits = [float(r[0] or 0) for r in rows]
+        best_trade = max(profits) if profits else 0
+        worst_trade = min(profits) if profits else 0
+        r_vals = [float(r[1] or 0) for r in rows if r[1] is not None]
+        avg_r_multiple = (sum(r_vals) / len(r_vals)) if r_vals else 0
+
+        ts_row = type('Row', (), {
+            'total_trades': total_trades,
+            'wins': wins,
+            'losses': losses,
+            'net_pnl': net_pnl,
+            'avg_pnl': avg_pnl,
+            'best_trade': best_trade,
+            'worst_trade': worst_trade,
+            'avg_r_multiple': avg_r_multiple,
+        })()
+
+        ts = ts_row
 
         # Max drawdown depuis EquityCurve
         dd_query = select(func.min(EquityCurve.drawdown_pct)).where(

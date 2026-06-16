@@ -617,7 +617,7 @@ def _gain_required_to_recover(dd_abs: float, peak: float) -> float:
         return 0.0
     dd_pct = dd_abs / peak
     if dd_pct >= 1.0:
-        return float("inf")
+        return 999999.0
     return (1.0 / (1.0 - dd_pct) - 1.0) * 100
 
 

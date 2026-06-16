@@ -9,7 +9,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from 'recharts';
-import { DollarSign, Target, Activity, BarChart3, Zap } from 'lucide-react';
+import { DollarSign, Target, Activity, TrendingDown, Zap } from 'lucide-react';
 
 const EMPTY_STATS: Stats = {
   net_profit: 0, gross_profit: 0, gross_loss: 0, total_trades: 0,

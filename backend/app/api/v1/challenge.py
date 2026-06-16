@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.account import Account
 from app.models.trade import Trade
 from app.models.equity import Checkpoint
+from app.schemas.equity import CheckpointCreate
 
 router = APIRouter(prefix="/challenge", tags=["challenge"])
 
@@ -248,35 +249,26 @@ async def list_checkpoints(
 # POST /challenge/checkpoints  — Ajouter un jalon
 # ───────────────────────────────────────────────────────────
 @router.post("/checkpoints")
-async def create_checkpoint(data: dict, db: AsyncSession = Depends(get_db)):
+async def create_checkpoint(data: CheckpointCreate, db: AsyncSession = Depends(get_db)):
     """
     Ajoute un checkpoint (jalon) à un compte challenge.
     Champs attendus: account_id, checkpoint_type, balance, equity,
-    optionnels: drawdown, notes.
+    optionnels: drawdown_pct, notes.
     """
-
-    required = {"account_id", "checkpoint_type", "balance", "equity"}
-    missing = required - set(data.keys())
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required fields: {', '.join(missing)}",
-        )
-
     # Vérifier que le compte existe
     acc_result = await db.execute(
-        select(Account).where(Account.id == data["account_id"])
+        select(Account).where(Account.id == data.account_id)
     )
     if not acc_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Account not found")
 
     checkpoint = Checkpoint(
-        account_id=data["account_id"],
-        checkpoint_type=data["checkpoint_type"],
-        balance=data["balance"],
-        equity=data["equity"],
-        drawdown_pct=data.get("drawdown_pct", data.get("drawdown", 0)),
-        notes=data.get("notes"),
+        account_id=data.account_id,
+        checkpoint_type=data.checkpoint_type,
+        balance=data.balance,
+        equity=data.equity,
+        drawdown_pct=data.drawdown_pct,
+        notes=data.notes,
     )
     db.add(checkpoint)
     await db.flush()
@@ -288,7 +280,7 @@ async def create_checkpoint(data: dict, db: AsyncSession = Depends(get_db)):
         "checkpoint_type": checkpoint.checkpoint_type,
         "balance": float(checkpoint.balance),
         "equity": float(checkpoint.equity),
-        "drawdown": float(checkpoint.drawdown_pct or 0),
+        "drawdown_pct": float(checkpoint.drawdown_pct or 0),
         "notes": checkpoint.notes,
         "created_at": checkpoint.created_at.isoformat()
         if checkpoint.created_at else None,
@@ -406,10 +398,14 @@ async def get_challenge_status(
     challenge_complete = target_reached and rules_respected
 
     return {
+        "account_id": account_id,
+        "account_name": acc.name,
+        "status": acc.status,
         "challenge_complete": challenge_complete,
         "target_reached": target_reached,
         "rules_respected": rules_respected,
         "net_pnl": round(net_pnl, 2),
+        "net_pnl_pct": round(net_pnl / starting * 100 if starting > 0 else 0, 2),
         "target_amount": round(target_amount, 2),
         "progress_pct": round(progress_pct, 2),
         "max_drawdown_pct": round(max_drawdown_pct, 2),

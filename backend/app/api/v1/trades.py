@@ -9,19 +9,32 @@ from app.schemas.trade import TradeCreate, TradeUpdate
 router = APIRouter(prefix="/trades", tags=["trades"])
 
 
+from sqlalchemy import inspect as sa_inspect
+
 def trade_to_dict(t: Trade) -> dict:
-    """Convert Trade SQLAlchemy model to dict, handling datetime and Decimal serialization."""
+    """Convert Trade SQLAlchemy model to dict, handling datetime, Decimal, and expired attributes."""
     d = {}
     for col in t.__table__.columns:
-        val = getattr(t, col.name)
-        if val is None:
-            d[col.name] = None
-        elif hasattr(val, "isoformat"):
-            d[col.name] = val.isoformat()
-        elif hasattr(val, "__float__"):
-            d[col.name] = float(val)
-        else:
-            d[col.name] = val
+        col_name = col.name
+        try:
+            val = getattr(t, col_name, None)
+            if val is None:
+                d[col_name] = None
+            elif hasattr(val, "isoformat"):
+                d[col_name] = val.isoformat()
+            elif hasattr(val, "__float__"):
+                d[col_name] = float(val)
+            else:
+                d[col_name] = val
+        except Exception:
+            try:
+                state = sa_inspect(t)
+                if state.attrs[col_name].loaded_value is not None:
+                    d[col_name] = state.attrs[col_name].loaded_value
+                else:
+                    d[col_name] = None
+            except Exception:
+                d[col_name] = None
     return d
 
 
@@ -86,7 +99,10 @@ async def update_trade(trade_id: int, data: TradeUpdate, db: AsyncSession = Depe
         raise HTTPException(status_code=404, detail="Trade not found")
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(trade, key, value)
+        if value is None:
+            continue
+        if hasattr(trade, key):
+            setattr(trade, key, value)
     await db.flush()
     await db.refresh(trade)
     return trade_to_dict(trade)

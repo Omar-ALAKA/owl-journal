@@ -45,21 +45,35 @@ async def get_sessions_analysis(
             *([Trade.account_id == account_id] if account_id else []),
         )
 
-        # Stats agrégées
-        stats_query = select(
-            func.count().label("total_trades"),
-            func.sum(case((Trade.profit > 0, 1), else_=0)).label("wins"),
-            func.sum(case((Trade.profit < 0, 1), else_=0)).label("losses"),
-            func.sum(Trade.profit).label("net_pnl"),
-            func.avg(Trade.profit).label("avg_pnl"),
-            func.avg(Trade.r_multiple).label("avg_r_multiple"),
-            func.max(Trade.profit).label("best_trade"),
-            func.min(Trade.profit).label("worst_trade"),
-            func.sum(Trade.commission).label("total_commission"),
-            func.sum(Trade.swap).label("total_swap"),
+        # Stats agrégées - fetch trades and aggregate in Python (avoids func.case + asyncpg issues)
+        trades_query = select(
+            Trade.profit,
+            Trade.r_multiple,
+            Trade.commission,
+            Trade.swap,
         ).where(trade_conditions)
-        stats_result = await db.execute(stats_query)
-        row = stats_result.one()
+        trades_result = await db.execute(trades_query)
+        trows = trades_result.all()
+
+        total = len(trows)
+        wins = sum(1 for t in trows if float(t[0] or 0) > 0)
+        losses = sum(1 for t in trows if float(t[0] or 0) < 0)
+        net_pnl_val = sum(float(t[0] or 0) for t in trows)
+        avg_pnl = (net_pnl_val / total) if total > 0 else 0
+        r_vals = [float(t[1] or 0) for t in trows if t[1] is not None]
+        avg_r = (sum(r_vals) / len(r_vals)) if r_vals else 0
+        profits_list = [float(t[0] or 0) for t in trows]
+        best = max(profits_list) if profits_list else 0
+        worst = min(profits_list) if profits_list else 0
+        total_commission = sum(float(t[2] or 0) for t in trows)
+        total_swap = sum(float(t[3] or 0) for t in trows)
+
+        row = type('R', (), {
+            'total_trades': total, 'wins': wins, 'losses': losses,
+            'net_pnl': net_pnl_val, 'avg_pnl': avg_pnl, 'avg_r_multiple': avg_r,
+            'best_trade': best, 'worst_trade': worst,
+            'total_commission': total_commission, 'total_swap': total_swap,
+        })()
 
         total = row.total_trades or 0
         wins = row.wins or 0
@@ -79,7 +93,7 @@ async def get_sessions_analysis(
             "wins": wins,
             "losses": losses,
             "win_rate": round(win_rate, 2),
-            "net_pnl": round(net_pnl, 2),
+            "net_profit": round(net_pnl, 2),
             "avg_pnl": round(avg_pnl, 2),
             "avg_r_multiple": round(avg_r, 2),
             "best_trade": round(best, 2),

@@ -6,6 +6,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.strategy import Strategy, Tag, TradeTag
 from app.models.trade import Trade
+from app.schemas.trade import StrategyCreate, StrategyUpdate, TagCreate
 
 router = APIRouter(prefix="/custom", tags=["strategies"])
 
@@ -75,18 +76,18 @@ async def get_strategy(strategy_id: int, db: AsyncSession = Depends(get_db)):
 # POST /strategies/custom  — Créer une stratégie
 # ──────────────────────────────────────────────
 @router.post("/")
-async def create_strategy(data: dict, db: AsyncSession = Depends(get_db)):
+async def create_strategy(data: StrategyCreate, db: AsyncSession = Depends(get_db)):
     # Vérifier l'unicité du nom
     existing = await db.execute(
-        select(Strategy).where(Strategy.name == data.get("name", ""))
+        select(Strategy).where(Strategy.name == data.name)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Strategy name already exists")
 
     strategy = Strategy(
-        name=data["name"],
-        description=data.get("description"),
-        rules=data.get("rules", {}),
+        name=data.name,
+        description=data.description,
+        rules=data.rules or {},
     )
     db.add(strategy)
     await db.flush()
@@ -105,7 +106,7 @@ async def create_strategy(data: dict, db: AsyncSession = Depends(get_db)):
 # ──────────────────────────────────────────────
 @router.put("/{strategy_id}")
 async def update_strategy(
-    strategy_id: int, data: dict, db: AsyncSession = Depends(get_db)
+    strategy_id: int, data: StrategyUpdate, db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(Strategy).where(Strategy.id == strategy_id))
     strategy = result.scalar_one_or_none()
@@ -113,17 +114,19 @@ async def update_strategy(
         raise HTTPException(status_code=404, detail="Strategy not found")
 
     # Vérifier unicité du nom si modifié
-    if "name" in data and data["name"] != strategy.name:
+    if data.name is not None and data.name != strategy.name:
         dup = await db.execute(
-            select(Strategy).where(Strategy.name == data["name"])
+            select(Strategy).where(Strategy.name == data.name)
         )
         if dup.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Strategy name already exists")
 
-    allowed_fields = {"name", "description", "rules"}
-    for key, value in data.items():
-        if key in allowed_fields:
-            setattr(strategy, key, value)
+    if data.name is not None:
+        strategy.name = data.name
+    if data.description is not None:
+        strategy.description = data.description
+    if data.rules is not None:
+        strategy.rules = data.rules
 
     await db.flush()
     await db.refresh(strategy)
@@ -165,10 +168,10 @@ async def list_tags(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/tags")
-async def create_tag(data: dict, db: AsyncSession = Depends(get_db)):
+async def create_tag(data: TagCreate, db: AsyncSession = Depends(get_db)):
     tag = Tag(
-        name=data["name"],
-        color=data.get("color", "#E8A838"),
+        name=data.name,
+        color=data.color or "#E8A838",
     )
     db.add(tag)
     await db.flush()

@@ -40,7 +40,7 @@ export function DrawdownAnalysis({ accountId, dateFrom, dateTo }: Props) {
 
   function fmt(p: number | null | undefined, a: number | null | undefined, r: number | null | undefined): string {
     if (unit === 'pct') return pct(p, 2);
-    if (unit === 'abs') return `$${sf(Math.abs(a))}`;
+    if (unit === 'abs') return `$${sf(Math.abs(a ?? 0))}`;
     if (unit === 'r') return r != null ? `${sf(r)}R` : '-';
     return '-';
   }

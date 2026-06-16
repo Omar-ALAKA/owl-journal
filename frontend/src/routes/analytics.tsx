@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell
 } from 'recharts';
-import { Target, Clock, BarChart3, TrendingDown } from 'lucide-react';
+import { Target, Clock, TrendingDown } from 'lucide-react';
 
 export function AnalyticsPage() {
   const [tab, setTab] = useState<'sessions' | 'setups' | 'r-dist' | 'daily' | 'drawdown'>('sessions');
@@ -48,7 +48,7 @@ export function AnalyticsPage() {
       <div className="tabs">
         <button className={`tab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => setTab('sessions')}><Clock size={14} style={{ marginRight: '6px' }} />Sessions</button>
         <button className={`tab ${tab === 'setups' ? 'active' : ''}`} onClick={() => setTab('setups')}><Target size={14} style={{ marginRight: '6px' }} />Setups</button>
-        <button className={`tab ${tab === 'r-dist' ? 'active' : ''}`} onClick={() => setTab('r-dist')}><BarChart3 size={14} style={{ marginRight: '6px' }} />R-Distribution</button>
+        <button className={`tab ${tab === 'r-dist' ? 'active' : ''}`} onClick={() => setTab('r-dist')}><TrendingDown size={14} style={{ marginRight: '6px' }} />R-Distribution</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>Daily Stats</button>
         <button className={`tab ${tab === 'drawdown' ? 'active' : ''}`} onClick={() => setTab('drawdown')}><TrendingDown size={14} style={{ marginRight: '6px' }} />Drawdown</button>
       </div>

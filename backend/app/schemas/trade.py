@@ -67,3 +67,22 @@ class TradeResponse(TradeBase):
 
     class Config:
         from_attributes = True
+
+
+# ── Strategy / Tag Schemas ──────────────────────────────────────────────────
+
+class StrategyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    rules: Optional[dict] = None
+
+
+class StrategyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rules: Optional[dict] = None
+
+
+class TagCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#E8A838"

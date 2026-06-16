@@ -115,7 +115,7 @@ export const fetchCurrentChallenge = () =>
   get<{ active: boolean; challenges: ChallengeData[]; count: number }>('/challenge/current');
 
 export const fetchChallengeStatus = (accountId: number) =>
-  get<{ account_id: number; account_name: string; status: string; target_reached: boolean; rules_respected: boolean; trading_days: number; min_trading_days: number; target_profit_pct: number; net_pnl_pct: number; max_drawdown_pct: number; drawdown_limit_pct: number; violations: { type: string; value: number; limit: number; severity: string; date?: string }[] }>(`/challenge/status/${accountId}`);
+  get<ChallengeStatus>(`/challenge/status/${accountId}`);
 
 export const fetchCheckpoints = (accountId?: number) =>
   get<{ checkpoints: Checkpoint[]; total: number }>('/challenge/checkpoints', accountId ? { account_id: accountId } : undefined);
@@ -236,5 +236,18 @@ export const fetchDrawdownAnalysis = (accountId?: number, dateFrom?: string, dat
       equity: number;
       drawdown_pct: number;
     }>;
+    current_equity: number;
+    peak_equity: number;
+    gain_required_pct: number;
+    gain_required_abs: number;
+    avg_loss: number;
+    ev_per_trade: number;
+    consec_losses_to_overall_limit: number;
+    consec_losses_to_daily_limit: number;
+    remaining_dd_room: number;
+    recovery_probability: number;
+    blowout_risk: number;
+    median_recovery_trades: number;
+    mean_recovery_trades: number;
   }>('/analytics/drawdown', Object.keys(params).length ? params : undefined);
 };
