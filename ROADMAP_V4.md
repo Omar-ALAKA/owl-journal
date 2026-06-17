@@ -2,540 +2,255 @@
 
 ## Vision
 
-Reconstruire OWL Journal from scratch avec les meilleures technologies disponibles. Zéro compromis sur la qualité. L'objectif : un dashboard trading professionnel, maintenable, performant et scalable.
+Dashboard trading professionnel pour comptes prop firm (FundedNext, FTMO, MyFundedFX, Equity Edge) et comptes personnels. Zéro compromis sur la qualité.
+
+**Stack** : React 18 + TypeScript + Vite + FastAPI + PostgreSQL 16
+**Déploiement** : Proxmox LXC (.71) — pas de Docker
+**Repo** : github.com/Omar-ALAKA/owl-journal
 
 ---
 
-## 🏗️ Architecture Globale
+## ✅ Fonctionnalités Complétées
+
+### Core
+- [x] Backend FastAPI avec routes CRUD (trades, accounts, analytics, journal, history, calendar, strategies)
+- [x] Frontend React 18 + TypeScript + Vite
+- [x] PostgreSQL 16 (migrations manuelles via psql — pas d'Alembic)
+- [x] Sidebar navigation avec routes lazy-loaded
+- [x] Dark/Light theme (localStorage + system preference)
+- [x] Design system V3 (tokens CSS, Outfit + JetBrains Mono)
+- [x] Responsive layout (sidebar collapse, mobile)
+
+### Import de Trades
+- [x] Import Excel (.xlsx) — Equity Edge, MT5, FTMO, MyFundedFX, FundedNext
+- [x] Import CSV (.csv)
+- [x] Preview avant import avec détection automatique du format
+- [x] Détection automatique direction (buy/sell → long/short)
+- [x] Détection automatique session (Asia/London/New York via UTC boundaries)
+- [x] **R-multiple** : calculé automatiquement depuis SL initial (section Orders) × volume
+- [x] **SL initial** : lu depuis la section Orders du rapport Equity Edge (pas le SL final de Positions)
+- [x] Support colonnes françaises ("Ordre", "Symbole", "S / L", "T / P", "Echange")
+- [x] Timezone support avec DST auto (EST↔EDT, CET↔CEST, etc.)
+- [x] Session hours configurables par compte (JSONB)
+
+### Analytics
+- [x] KPI cards (Net P&L, Win Rate, Profit Factor, Streak)
+- [x] Equity curve (AreaChart)
+- [x] Drawdown tracking (max + current)
+- [x] Calendar heatmap
+- [x] Session analysis (bar chart)
+- [x] R-multiple histogram
+- [x] P&L distribution
+- [x] Monthly/Weekly/Yearly period totals
+- [x] Journal quotidien (daily stats)
+- [x] History (comparaison périodes)
+
+### Funded Accounts
+- [x] Type de compte : challenge / funded / personal
+- [x] Personal target (% configurable, défaut 5%)
+- [x] Payout tracking (CRUD)
+- [x] Drawdown monitoring avec status visuel (SAFE / WARNING / DANGER / BREACHED)
+- [x] Current drawdown en temps réel
+- [x] Indicateur "Au peak" quand drawdown = 0
+- [x] Prop firm rules reminder
+
+### Challenge Tracking
+- [x] Challenge phases (Phase 1, Phase 2, Funded)
+- [x] Objectifs de profit (%)
+- [x] Limites de drawdown (%)
+- [x] Daily loss limit
+- [x] Checkpoints (milestones)
+- [x] Violation detection
+
+### Settings
+- [x] Configuration des sessions de trading (heures par session)
+- [x] Preview UTC des sessions
+- [x] Timezone par compte
+- [x] Personal target % par compte
+
+---
+
+## 🚧 En Cours / À Faire
+
+### Priorité Haute
+- [ ] **Rebuild equity curve** — calculer et stocker l'equity curve dans `equity_curve` table
+- [ ] **Daily stats auto** — recalculer les daily stats après chaque import
+- [ ] **WebSocket temps réel** — notifications live (nouveau trade, drawdown alert)
+- [ ] **Export PDF** — rapport de performance hebdomadaire/mensuel
+
+### Priorité Moyenne
+- [ ] **Tags** — système de tags pour les trades (émotion, erreur, pattern)
+- [ ] **Setup quality** — notation 1-5 étoiles par trade
+- [ ] **Confluences** — champs multi-sélection pour les confluences
+- [ ] **Multi-account equity chart** — comparer plusieurs comptes sur un même graphique
+- [ ] **Trade images** — upload de screenshots attachés aux trades
+- [ ] **Notes markdown** — éditeur markdown pour les notes de trade
+
+### Priorité Basse
+- [ ] **PWA** — installable sur mobile
+- [ ] **i18n** — support multilingue (FR/EN)
+- [ ] **Backup auto** — export DB quotidien
+- [ ] **API publique** — endpoints pour intégrations tierces
+- [ ] **Tests** — pytest backend + vitest frontend
+
+---
+
+## 🐛 Bugs Connus / Corrections Récentes
+
+### 17 Juin 2026
+- **R-multiple corrigé** : utilisait le SL final (Positions) au lieu du SL initial (Orders). Maintenant lit la section Orders du rapport Equity Edge pour récupérer le SL initial par ticket. Ajouté le volume dans le calcul (profit / risk × volume).
+- **Session detection corrigée** : utilisait les heures locales de l'utilisateur au lieu des boundaries UTC. Les trades NY étaient détectés comme London. Corrigé en utilisant `get_session_for_time` de `timezone.py` (Asia 0-8 UTC, London 8-13 UTC, NY 13-21 UTC).
+- **Drawdown tracking ajouté** : `current_drawdown`, `current_drawdown_pct`, `drawdown_status` (safe/warning/danger/breached) dans le funded summary. Indicateur visuel "Au peak" quand drawdown = 0.
+
+### 16 Juin 2026
+- **Session hours configurables** : chaque compte peut avoir ses propres heures de session (JSONB `session_hours`).
+- **Timezone DST auto** : EST↔EDT détecté automatiquement par date de trade.
+- **Funded dashboard** : page dédiée avec personal target, payout tracker, drawdown monitor.
+- **Import Equity Edge FR** : support complet des rapports en français.
+
+---
+
+## 🏗️ Architecture Actuelle
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        PRODUCTION                           │
+│                    PRODUCTION (LXC .71)                     │
 ├─────────────────────────────────────────────────────────────┤
-│  Nginx (reverse proxy, SSL, gzip, rate limiting)            │
-│  ├── /          → React SPA (Vite build, static files)      │
-│  ├── /api       → FastAPI (Python)                          │
-│  └── /ws        → WebSocket (temps réel)                    │
+│  FastAPI (port 8100)                                        │
+│  ├── /api/v1/*  → API REST                                 │
+│  ├── /api/import/* → Import CSV/XLSX                       │
+│  └── /          → React SPA (Vite build → static files)    │
 ├─────────────────────────────────────────────────────────────┤
-│  PostgreSQL 16 (données)                                    │
-│  Redis (cache, sessions, rate limiting)                     │
+│  PostgreSQL 16 (192.168.10.72)                              │
+│  ├── accounts, trades, payouts, equity_curve, daily_stats  │
+│  ├── checkpoints, strategies, tags, trade_tags             │
+│  └── Pas d'Alembic — migrations manuelles via psql         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 🎨 Frontend — React 18+ avec TypeScript
-
-### Stack Technique
-
-| Techno | Raison |
-|--------|--------|
-| **React 18** | Concurrent rendering, Suspense, hooks avancés |
-| **TypeScript 5** | Typage strict, zéro bug de type en prod |
-| **Vite 5** | Build ultra-rapide, HMR instantané |
-| **TanStack Router** | Router type-safe, meilleur que React Router |
-| **TanStack Query v5** | Cache serveur automatique, refetch, optimistic updates |
-| **Zustand** | State management léger, pas de boilerplate Redux |
-| **React Hook Form + Zod** | Forms type-safe avec validation |
-| **Tailwind CSS 4** | CSS utility-first, zéro CSS custom |
-| **shadcn/ui** | Composants UI copiables, pas de dépendance |
-| **Recharts** | Graphiques React natifs, pas de CDN externe |
-| **Framer Motion** | Animations fluides |
-| **React Virtual** | Virtualisation des listes (1000+ trades) |
-| **date-fns** | Manipulation dates, légère et tree-shakeable |
-| **React Hot Toast** | Notifications élégantes |
-| **Lucide React** | Icônes SVG légères |
-
-### Structure du Projet Frontend
+### Structure des Fichiers
 
 ```
 owl-journal/
 ├── frontend/
 │   ├── src/
-│   │   ├── main.tsx                    # Entry point
-│   │   ├── App.tsx                     # Root component
-│   │   ├── routes/                     # TanStack Router
-│   │   │   ├── __root.tsx
-│   │   │   ├── index.tsx               # Dashboard
+│   │   ├── main.tsx, App.tsx
+│   │   ├── routes/           # Pages (React.lazy)
+│   │   │   ├── dashboard.tsx
 │   │   │   ├── trades.tsx
-│   │   │   ├── trades.$tradeId.tsx     # Detail trade
-│   │   │   ├── strategies.tsx
-│   │   │   ├── accounts.tsx
-│   │   │   ├── accounts.$accountId.tsx
 │   │   │   ├── journal.tsx
 │   │   │   ├── history.tsx
 │   │   │   ├── calendar.tsx
 │   │   │   ├── analytics.tsx
-│   │   │   ├── import.tsx
-│   │   │   └── settings.tsx
+│   │   │   ├── funded.tsx
+│   │   │   ├── challenge.tsx
+│   │   │   ├── accounts.tsx
+│   │   │   ├── settings.tsx
+│   │   │   └── import.tsx
 │   │   ├── components/
-│   │   │   ├── ui/                     # shadcn/ui components
-│   │   │   │   ├── button.tsx
-│   │   │   │   ├── dialog.tsx
-│   │   │   │   ├── dropdown-menu.tsx
-│   │   │   │   ├── input.tsx
-│   │   │   │   ├── select.tsx
-│   │   │   │   ├── table.tsx
-│   │   │   │   ├── tabs.tsx
-│   │   │   │   ├── toast.tsx
-│   │   │   │   └── ...
-│   │   │   ├── layout/
-│   │   │   │   ├── sidebar.tsx
-│   │   │   │   ├── header.tsx
-│   │   │   │   └── mobile-nav.tsx
-│   │   │   ├── dashboard/
-│   │   │   │   ├── kpi-card.tsx
-│   │   │   │   ├── equity-chart.tsx
-│   │   │   │   ├── drawdown-chart.tsx
-│   │   │   │   ├── calendar-heatmap.tsx
-│   │   │   │   ├── period-totals.tsx
-│   │   │   │   └── streak-display.tsx
-│   │   │   ├── trades/
-│   │   │   │   ├── trade-table.tsx
-│   │   │   │   ├── trade-detail-modal.tsx
-│   │   │   │   ├── trade-form.tsx
-│   │   │   │   ├── trade-filters.tsx
-│   │   │   │   └── inline-edit.tsx
-│   │   │   ├── charts/
-│   │   │   │   ├── equity-curve.tsx
-│   │   │   │   ├── pl-distribution.tsx
-│   │   │   │   ├── r-histogram.tsx
-│   │   │   │   ├── session-bar.tsx
-│   │   │   │   ├── monthly-bar.tsx
-│   │   │   │   └── donut-chart.tsx
-│   │   │   └── import/
-│   │   │       ├── dropzone.tsx
-│   │   │       ├── preview-table.tsx
-│   │   │       └── account-matcher.tsx
-│   │   ├── hooks/
-│   │   │   ├── use-trades.ts
-│   │   │   ├── use-stats.ts
-│   │   │   ├── use-equity.ts
-│   │   │   ├── use-calendar.ts
-│   │   │   ├── use-challenge.ts
-│   │   │   └── use-toast.ts
-│   │   ├── lib/
-│   │   │   ├── api.ts                   # Axios client
-│   │   │   ├── utils.ts                 # cn(), formatters
-│   │   │   └── constants.ts
-│   │   ├── stores/
-│   │   │   ├── theme.ts                 # dark/light
-│   │   │   ├── filters.ts               # filtres globaux
-│   │   │   └── ui.ts                    # modals, sidebar
-│   │   ├── types/
-│   │   │   ├── trade.ts
-│   │   │   ├── account.ts
-│   │   │   ├── equity.ts
-│   │   │   └── api.ts
-│   │   └── styles/
-│   │       └── globals.css             # Tailwind + variables CSS
-│   ├── public/
-│   │   └── favicon.svg
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── tailwind.config.ts
-```
-
----
-
-## ⚙️ Backend — FastAPI avec PostgreSQL
-
-### Stack Technique
-
-| Techno | Raison |
-|--------|--------|
-| **Python 3.13** | Dernière version, performances améliorées |
-| **FastAPI 0.115+** | Async natif, OpenAPI auto, validation Pydantic |
-| **SQLAlchemy 2.0** | ORM moderne, async support |
-| **asyncpg** | Driver PostgreSQL async le plus rapide |
-| **Alembic** | Migrations de base de données |
-| **Pydantic v2** | Validation ultra-rapide |
-| **python-jose** | JWT tokens |
-| **passlib** | Hashage mots de passe |
-| **Celery + Redis** | Tâches async (imports, rebuilds) |
-| **pytest + httpx** | Tests async |
-| **structlog** | Logging structuré JSON |
-| **uv** | Package manager Python (100x plus rapide que pip) |
-
-### Structure du Projet Backend
-
-```
-owl-journal/
+│   │   │   ├── layout/       # sidebar, header
+│   │   │   └── ui/           # button, dialog, table, etc.
+│   │   ├── lib/              # api.ts, utils.ts
+│   │   ├── stores/           # theme, filters, ui
+│   │   ├── types/            # index.ts (tous les types TS)
+│   │   └── styles/           # globals.css
+│   └── dist/                 # Build → copié dans backend/static/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                     # FastAPI app factory
-│   │   ├── config.py                   # Settings (pydantic-settings)
-│   │   ├── database.py                 # Engine, session, base
-│   │   ├── dependencies.py             # DB session, auth
-│   │   ├── models/                     # SQLAlchemy models
-│   │   │   ├── __init__.py
-│   │   │   ├── trade.py
-│   │   │   ├── account.py
-│   │   │   ├── equity.py
-│   │   │   ├── daily_stats.py
-│   │   │   ├── checkpoint.py
-│   │   │   ├── strategy.py
-│   │   │   └── confluence.py
-│   │   ├── schemas/                    # Pydantic schemas
-│   │   │   ├── __init__.py
-│   │   │   ├── trade.py
-│   │   │   ├── account.py
-│   │   │   ├── equity.py
-│   │   │   └── analytics.py
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   ├── v1/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── router.py
-│   │   │   │   ├── trades.py
-│   │   │   │   ├── accounts.py
-│   │   │   │   ├── analytics.py
-│   │   │   │   ├── equity.py
-│   │   │   │   ├── calendar.py
-│   │   │   │   ├── strategies.py
-│   │   │   │   ├── import_.py
-│   │   │   │   ├── journal.py
-│   │   │   │   └── health.py
-│   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── equity.py               # Calcul equity curve
-│   │   │   ├── analytics.py            # Stats, streaks, KPIs
-│   │   │   ├── import_parser.py        # CSV/XLSX parsing
-│   │   │   ├── challenge.py            # Challenge tracking
-│   │   │   └── rebuild.py              # Rebuild equity/daily
-│   │   ├── tasks/                      # Celery tasks
-│   │   │   ├── __init__.py
-│   │   │   ├── import_tasks.py
-│   │   │   └── rebuild_tasks.py
-│   │   ├── middleware/
-│   │   │   ├── __init__.py
-│   │   │   ├── cors.py
-│   │   │   ├── logging.py
-│   │   │   └── rate_limit.py
-│   │   └── utils/
-│   │       ├── __init__.py
-│   │       ├── formatters.py
-│   │       └── validators.py
-│   ├── migrations/                     # Alembic
-│   │   ├── versions/
-│   │   └── env.py
-│   ├── tests/
-│   │   ├── conftest.py
-│   │   ├── test_trades.py
-│   │   ├── test_accounts.py
-│   │   └── test_analytics.py
-│   ├── pyproject.toml
-│   └── Dockerfile
+│   │   ├── main.py           # FastAPI app
+│   │   ├── database.py       # Engine, session
+│   │   ├── models/           # SQLAlchemy (trade, account, payout, etc.)
+│   │   ├── schemas/          # Pydantic (trade, account, payout, etc.)
+│   │   ├── api/v1/           # Routes (trades, accounts, funded, etc.)
+│   │   ├── services/         # Analytics, session_config, timezone
+│   │   └── static/           # React build output
+│   └── .venv/
+└── ROADMAP_V4.md
 ```
 
 ---
 
-## 🗄️ Base de Données — PostgreSQL 16
-
-### Schema
+## 🗄️ Schema DB (État Actuel)
 
 ```sql
--- Comptes de trading
-CREATE TABLE accounts (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    broker VARCHAR(50),
-    broker_acct VARCHAR(50),
-    account_type VARCHAR(20) CHECK (account_type IN ('challenge', 'funded', 'personal')),
-    phase VARCHAR(20),
-    status VARCHAR(20) DEFAULT 'active',
-    starting_balance DECIMAL(12,2) DEFAULT 0,
-    current_balance DECIMAL(12,2) DEFAULT 0,
-    target_profit_pct DECIMAL(5,2) DEFAULT 10,
-    max_drawdown_pct DECIMAL(5,2) DEFAULT 7,
-    daily_loss_pct DECIMAL(5,2) DEFAULT 5,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Accounts
+accounts (id, name, broker, broker_acct, account_type, phase, status,
+          starting_balance, current_balance, target_profit_pct,
+          max_drawdown_pct, daily_loss_pct,
+          personal_target_pct, session_hours JSONB,
+          notes, created_at, updated_at)
 
 -- Trades
-CREATE TABLE trades (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    ticket VARCHAR(50),
-    open_time TIMESTAMPTZ NOT NULL,
-    close_time TIMESTAMPTZ,
-    symbol VARCHAR(20) NOT NULL,
-    direction VARCHAR(5) CHECK (direction IN ('long', 'short')),
-    volume DECIMAL(10,4) NOT NULL,
-    entry_price DECIMAL(12,5) NOT NULL,
-    exit_price DECIMAL(12,5),
-    sl_price DECIMAL(12,5),
-    tp_price DECIMAL(12,5),
-    profit DECIMAL(12,2) DEFAULT 0,
-    commission DECIMAL(12,2) DEFAULT 0,
-    swap DECIMAL(12,2) DEFAULT 0,
-    session VARCHAR(20),
-    setup VARCHAR(100),
-    confluences TEXT,
-    notes TEXT,
-    setup_quality SMALLINT CHECK (setup_quality BETWEEN 1 AND 5),
-    rr_target DECIMAL(6,2),
-    rr_actual DECIMAL(6,2),
-    r_multiple DECIMAL(6,2),
-    sl_distance DECIMAL(10,2),
-    tp_distance DECIMAL(10,2),
-    is_winner SMALLINT DEFAULT 0,  -- 0=loss, 1=win, 2=be
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+trades (id, account_id, ticket, open_time, close_time,
+        symbol, direction, volume, entry_price, exit_price,
+        sl_price, tp_price, profit, commission, swap,
+        session, setup, confluences, notes,
+        setup_quality, rr_target, rr_actual, r_multiple,
+        sl_distance, tp_distance, is_winner,
+        created_at, updated_at)
 
--- Equity curve (daily snapshots)
-CREATE TABLE equity_curve (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    timestamp TIMESTAMPTZ NOT NULL,
-    equity DECIMAL(12,2) NOT NULL,
-    drawdown DECIMAL(12,2) DEFAULT 0,
-    drawdown_pct DECIMAL(6,2) DEFAULT 0,
-    UNIQUE(account_id, timestamp)
-);
+-- Payouts (nouveau)
+payouts (id, account_id FK, amount, payout_date, status, notes, created_at)
+
+-- Equity curve
+equity_curve (id, account_id FK, timestamp, equity, drawdown, drawdown_pct)
 
 -- Daily stats
-CREATE TABLE daily_stats (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    trade_date DATE NOT NULL,
-    net_pnl DECIMAL(12,2) DEFAULT 0,
-    gross_profit DECIMAL(12,2) DEFAULT 0,
-    gross_loss DECIMAL(12,2) DEFAULT 0,
-    total_trades INTEGER DEFAULT 0,
-    wins INTEGER DEFAULT 0,
-    losses INTEGER DEFAULT 0,
-    win_rate DECIMAL(5,2) DEFAULT 0,
-    profit_factor DECIMAL(6,3) DEFAULT 0,
-    UNIQUE(account_id, trade_date)
-);
+daily_stats (id, account_id FK, trade_date, net_pnl, gross_profit, gross_loss,
+             total_trades, wins, losses, win_rate, profit_factor)
 
--- Checkpoints (challenge milestones)
-CREATE TABLE checkpoints (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    checkpoint_type VARCHAR(30) NOT NULL,
-    balance DECIMAL(12,2) NOT NULL,
-    equity DECIMAL(12,2) NOT NULL,
-    drawdown DECIMAL(12,2) DEFAULT 0,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Checkpoints
+checkpoints (id, account_id FK, checkpoint_type, balance, equity, drawdown, notes, created_at)
 
--- Custom strategies
-CREATE TABLE strategies (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL,
-    description TEXT,
-    rules JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Strategies
+strategies (id, name, description, rules JSONB, created_at, updated_at)
 
 -- Tags
-CREATE TABLE tags (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
-    color VARCHAR(7) DEFAULT '#E8A838'
-);
-
-CREATE TABLE trade_tags (
-    trade_id INTEGER REFERENCES trades(id) ON DELETE CASCADE,
-    tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (trade_id, tag_id)
-);
-
--- Indexes
-CREATE INDEX idx_trades_account ON trades(account_id);
-CREATE INDEX idx_trades_open_time ON trades(open_time);
-CREATE INDEX idx_trades_setup ON trades(setup);
-CREATE INDEX idx_trades_session ON trades(session);
-CREATE INDEX idx_equity_account_time ON equity_curve(account_id, timestamp);
-CREATE INDEX idx_daily_account_date ON daily_stats(account_id, trade_date);
+tags (id, name, color)
+trade_tags (trade_id FK, tag_id FK)
 ```
 
 ---
 
-## 🐳 Infrastructure — Docker Compose
+## 📊 KPIs Calculés
 
-```yaml
-# docker-compose.yml
-version: '3.9'
-
-services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: owl_journal
-      POSTGRES_USER: owl
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U owl"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: postgresql+asyncpg://owl:${DB_PASSWORD}@db:5432/owl_journal
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    ports:
-      - "8100:8100"
-
-  frontend:
-    build: ./frontend
-    depends_on:
-      - backend
-    ports:
-      "80:80"
-
-  celery:
-    build: ./backend
-    command: celery -A app.tasks worker --loglevel=info
-    environment:
-      DATABASE_URL: postgresql+asyncpg://owl:${DB_PASSWORD}@db:5432/owl_journal
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      - db
-      - redis
-
-volumes:
-  pgdata:
-```
+| KPI | Formule | Statut |
+|-----|---------|--------|
+| Net P&L | Σ profit | ✅ |
+| Win Rate | wins / total × 100 | ✅ |
+| Profit Factor | gross_profit / abs(gross_loss) | ✅ |
+| Max Drawdown | max(peak - equity) | ✅ |
+| Current Drawdown | peak - current_equity | ✅ |
+| R-multiple | profit / (sl_distance × volume) | ✅ |
+| Avg R | Σ r_multiple / total | ✅ |
+| Streak | consecutive wins/losses | ✅ |
+| Personal Progress | net_pnl / target_amount × 100 | ✅ |
+| Drawdown Status | safe/warning/danger/breached | ✅ |
 
 ---
 
-## 📋 Phases de Développement
-
-### Phase 1 — Foundation (Semaine 1)
-- [ ] Setup projet : Vite + React + TS + Tailwind
-- [ ] Setup backend : FastAPI + SQLAlchemy + Alembic
-- [ ] Schema PostgreSQL complet
-- [ ] Docker Compose (db + redis + backend + frontend)
-- [ ] API CRUD trades + accounts
-- [ ] Pages : Dashboard vide, Trades liste, Accounts liste
-- [ ] Sidebar navigation + routing
-- [ ] Dark/Light theme
-
-### Phase 2 — Dashboard & Analytics (Semaine 2)
-- [ ] KPI cards (Net P&L, PF, Win Rate, Streak)
-- [ ] Equity curve chart (Recharts)
-- [ ] Drawdown monitor
-- [ ] Calendar heatmap
-- [ ] Period totals (week/month/year)
-- [ ] Session analysis
-- [ ] Setup analysis
-- [ ] OWL Score radar
-
-### Phase 3 — Trades Management (Semaine 3)
-- [ ] Trade table avec filtres
-- [ ] Trade detail modal
-- [ ] Add/Edit trade form
-- [ ] Inline editing
-- [ ] Import CSV/XLSX wizard
-- [ ] Tags management
-- [ ] Confluences
-- [ ] Quality stars
-
-### Phase 4 — Features Avancées (Semaine 4)
-- [ ] Challenge tracking (Funding Pips, FTMO, etc.)
-- [ ] Multi-account support
-- [ ] Journal/Notes
-- [ ] History
-- [ ] Strategies management
-- [ ] Checkpoints
-- [ ] Reports export (PDF)
-- [ ] WebSocket temps réel
-
-### Phase 5 — Polish & Deploy (Semaine 5)
-- [ ] Tests unitaires (pytest + vitest)
-- [ ] Tests E2E (Playwright)
-- [ ] CI/CD (GitHub Actions)
-- [ ] SSL + Nginx
-- [ ] Backup automatique DB
-- [ ] Monitoring (Sentry)
-- [ ] Documentation API (Swagger)
-- [ ] PWA support
-
----
-
-## 🔐 Sécurité
-
-- JWT tokens avec refresh
-- CORS restrictif
-- Rate limiting (Redis)
-- Validation stricte (Pydantic + Zod)
-- Pas de inline handlers (tout en React)
-- CSP stricte sans unsafe-inline
-- SQL injection impossible (SQLAlchemy paramétré)
-- XSS impossible (React échappe tout)
-
----
-
-## 📊 Comparaison Ancien vs Nouveau
-
-| Aspect | V3 (Vanilla JS) | V4 (React + TS) |
-|--------|-----------------|-----------------|
-| CSP | ❌ Inline handlers bloqués | ✅ Zéro inline |
-| XSS | ⚠️ Manuel | ✅ Auto par React |
-| Typage | ❌ JS loose | ✅ TypeScript strict |
-| Composants | ❌ HTML strings | ✅ Composants réutilisables |
-| State | ❌ Global variables | ✅ Zustand + TanStack Query |
-| Charts | ⚠️ Chart.js CDN | ✅ Recharts (bundled) |
-| Build | ❌ Aucun | ✅ Vite (HMR instant) |
-| Tests | ❌ Aucun | ✅ pytest + vitest + Playwright |
-| DB | ⚠️ SQLite | ✅ PostgreSQL |
-| Cache | ❌ Aucun | ✅ Redis |
-| Tasks async | ❌ Aucun | ✅ Celery |
-| Migrations | ❌ Manuel | ✅ Alembic |
-| API docs | ❌ Aucune | ✅ Swagger auto |
-
----
-
-## 🚀 Commandes de Démarrage
+## 🚀 Commandes
 
 ```bash
-# Cloner
-git clone <repo> && cd owl-journal
+# Backend
+cd /root/owl-journal/backend
+source .venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8100
 
-# Lancer tout
-docker compose up -d
+# Frontend build
+cd /root/owl-journal/frontend
+npx vite build
+cp -r dist/* ../backend/static/
 
-# Backend only
-cd backend && uv run uvicorn app.main:app --reload
+# DB
+psql -h 192.168.10.72 -U owl -d owl_journal
 
-# Frontend only
-cd frontend && npm run dev
-
-# Migrations
-cd backend && alembic upgrade head
-
-# Tests
-cd backend && pytest
-cd frontend && npm test
+# Git
+cd /root/owl-journal
+git add -A && git commit -m "..." && git push
 ```
 
 ---
 
+*Dernière mise à jour : 17 Juin 2026*
 *OWL Journal V4 — Zéro compromis. Qualité production.*
