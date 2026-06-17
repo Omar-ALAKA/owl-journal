@@ -63,6 +63,23 @@ async def list_funded_accounts(db: AsyncSession = Depends(get_db)):
                 max_dd = dd
         max_dd_pct = (max_dd / starting * 100) if starting > 0 else 0
 
+        # Current drawdown
+        current_dd = max(0, peak - current_equity)
+        current_dd_pct = (current_dd / starting * 100) if starting > 0 else 0
+
+        # Drawdown status
+        dd_limit = float(acc.max_drawdown_pct or 7)
+        if current_dd_pct <= 0:
+            dd_status = "safe"
+        elif current_dd_pct < dd_limit * 0.5:
+            dd_status = "safe"
+        elif current_dd_pct < dd_limit * 0.8:
+            dd_status = "warning"
+        elif current_dd_pct < dd_limit:
+            dd_status = "danger"
+        else:
+            dd_status = "breached"
+
         # Total payouts
         payout_query = select(func.sum(Payout.amount)).where(
             and_(Payout.account_id == acc.id, Payout.status.in_(["approved", "paid"]))
@@ -85,6 +102,9 @@ async def list_funded_accounts(db: AsyncSession = Depends(get_db)):
             "personal_target_reached": target_reached,
             "max_drawdown": round(max_dd, 2),
             "max_drawdown_pct": round(max_dd_pct, 2),
+            "current_drawdown": round(current_dd, 2),
+            "current_drawdown_pct": round(current_dd_pct, 2),
+            "drawdown_status": dd_status,
             "drawdown_limit_pct": float(acc.max_drawdown_pct or 7),
             "total_trades": total_trades,
             "wins": wins,
@@ -145,6 +165,23 @@ async def get_funded_summary(account_id: int, db: AsyncSession = Depends(get_db)
             max_dd = dd
     max_dd_pct = (max_dd / starting * 100) if starting > 0 else 0
 
+    # Current drawdown (from current equity)
+    current_dd = max(0, peak - current_equity)
+    current_dd_pct = (current_dd / starting * 100) if starting > 0 else 0
+
+    # Drawdown status
+    dd_limit = float(acc.max_drawdown_pct or 7)
+    if current_dd_pct <= 0:
+        dd_status = "safe"
+    elif current_dd_pct < dd_limit * 0.5:
+        dd_status = "safe"
+    elif current_dd_pct < dd_limit * 0.8:
+        dd_status = "warning"
+    elif current_dd_pct < dd_limit:
+        dd_status = "danger"
+    else:
+        dd_status = "breached"
+
     # Payouts
     payout_query = select(Payout).where(Payout.account_id == account_id).order_by(Payout.payout_date.desc())
     payout_result = await db.execute(payout_query)
@@ -165,6 +202,9 @@ async def get_funded_summary(account_id: int, db: AsyncSession = Depends(get_db)
         "personal_progress_pct": round(personal_progress, 2),
         "personal_target_reached": net_pnl >= target_amount,
         "max_drawdown_pct": round(max_dd_pct, 2),
+        "current_drawdown": round(current_dd, 2),
+        "current_drawdown_pct": round(current_dd_pct, 2),
+        "drawdown_status": dd_status,
         "drawdown_limit_pct": float(acc.max_drawdown_pct or 7),
         "drawdown_remaining_pct": round(max(0, float(acc.max_drawdown_pct or 7) - max_dd_pct), 2),
         "total_trades": total_trades,

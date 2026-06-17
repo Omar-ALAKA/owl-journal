@@ -211,20 +211,58 @@ export function FundedPage() {
           </div>
 
           {/* Drawdown bar */}
-          <div className="card" style={{ marginBottom: '20px' }}>
+          <div className="card" style={{ 
+            marginBottom: '20px',
+            borderLeft: `4px solid ${
+              summary?.drawdown_status === 'breached' ? 'var(--color-loss)' :
+              summary?.drawdown_status === 'danger' ? 'var(--color-loss)' :
+              summary?.drawdown_status === 'warning' ? 'var(--color-warning)' :
+              'var(--color-profit)'
+            }`
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <TrendingUp size={18} className="text-red" />
               <span style={{ fontWeight: 700, fontSize: '15px' }}>Drawdown</span>
+              {summary?.drawdown_status === 'safe' && (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'var(--color-profit)22', color: 'var(--color-profit)' }}>
+                  ✓ SAFE
+                </span>
+              )}
+              {summary?.drawdown_status === 'warning' && (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'var(--color-warning)22', color: 'var(--color-warning)' }}>
+                  ⚠ ATTENTION
+                </span>
+              )}
+              {summary?.drawdown_status === 'danger' && (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'var(--color-loss)22', color: 'var(--color-loss)' }}>
+                  🔴 DANGER
+                </span>
+              )}
+              {summary?.drawdown_status === 'breached' && (
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'var(--color-loss)', color: '#fff' }}>
+                  ✕ BREACHED
+                </span>
+              )}
             </div>
             {summary && (
               <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
                 Marge restante: <span style={{ fontWeight: 700, color: summary.drawdown_remaining_pct < 2 ? 'var(--color-loss)' : 'var(--color-text-primary)' }}>
                   {summary.drawdown_remaining_pct.toFixed(1)}%
                 </span>
+                {summary.current_drawdown_pct > 0 && (
+                  <span style={{ marginLeft: '12px', color: 'var(--color-text-muted)' }}>
+                    DD actuel: <span style={{ fontWeight: 700, color: 'var(--color-loss)' }}>{summary.current_drawdown_pct.toFixed(1)}%</span>
+                  </span>
+                )}
+                {summary.current_drawdown_pct === 0 && (
+                  <span style={{ marginLeft: '12px', color: 'var(--color-profit)', fontWeight: 700 }}>
+                    ✓ Au peak — aucun drawdown
+                  </span>
+                )}
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-              <span className="text-muted">Drawdown actuel</span>
+              <span className="text-muted">Drawdown max</span>
               <span className="text-red" style={{ fontWeight: 700 }}>
                 {selected.max_drawdown_pct.toFixed(1)}% / {selected.drawdown_limit_pct}%
               </span>

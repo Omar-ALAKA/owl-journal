@@ -409,6 +409,9 @@ export interface FundedSummary {
   personal_progress_pct: number;
   personal_target_reached: boolean;
   max_drawdown_pct: number;
+  current_drawdown: number;
+  current_drawdown_pct: number;
+  drawdown_status: 'safe' | 'warning' | 'danger' | 'breached';
   drawdown_limit_pct: number;
   drawdown_remaining_pct: number;
   total_trades: number;

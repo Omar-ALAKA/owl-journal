@@ -495,10 +495,8 @@ def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC", session_conf
             # Auto-detect session from open_time using timezone + user session config
             if not session and open_time:
                 try:
-                    from app.services.timezone import get_offset
-                    from app.services.session_config import get_session_for_time
-                    offset = get_offset(tz_code, open_time)
-                    session = get_session_for_time(open_time, offset, session_config)
+                    from app.services.timezone import get_session_for_time as _get_session_utc
+                    session = _get_session_utc(open_time)
                 except Exception:
                     # Fallback: detect session from UTC hour
                     h = open_time.hour
