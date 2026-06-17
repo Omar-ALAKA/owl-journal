@@ -65,7 +65,7 @@ def _map_columns(headers: list[str]) -> dict[str, int]:
 
     COLUMN_MAP = {
         "ticket": ["ticket", "order", "order id", "trade id", "deal",
-                   "#", "trade #", "deal id", "position"],
+                   "#", "trade #", "deal id", "position", "ordre"],
         "open_time": [
             "open time", "opentime", "open_time", "time", "date/time",
             "opening time", "open", "datetime", "timestamp", "time opened",
@@ -342,9 +342,9 @@ def _parse_csv_content(content: str, tz_code: str = "UTC", session_config: dict 
 def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC", session_config: dict | None = None) -> list[dict]:
     """Parse XLSX content directly using openpyxl.
 
-    Handles multi-section MT5 exports (Positions / Orders / Deals)
-    by detecting section markers in multiple languages and only
-    parsing the Positions block.
+    Handles multi-section MT5/Equity Edge exports (Positions / Orders / Deals)
+    by detecting section markers. Parses Positions for trade data and Orders
+    for initial SL values.
     """
     import openpyxl
 
@@ -359,22 +359,61 @@ def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC", session_conf
             continue
 
         # ── Step 1: Detect section boundaries ──
-        # MT5 exports have 3 sections: Positions, Orders, Deals
-        # We only want the Positions block.
         positions_header_row = None
         positions_start = None
         positions_end = None
+        orders_header_row = None
+        orders_start = None
+        orders_end = None
 
         for i, row in enumerate(rows):
             marker = _is_section_marker(row)
             if marker == "positions":
                 positions_header_row = i + 1  # next row = headers
                 positions_start = i + 2       # data starts after headers
-            elif marker in ("orders", "deals") and positions_start is not None:
+            elif marker == "orders" and positions_start is not None:
                 positions_end = i
+                orders_header_row = i + 1
+                orders_start = i + 2
+            elif marker == "deals" and orders_start is not None:
+                orders_end = i
                 break
 
-        # ── Step 2: Slice to Positions block only ──
+        # If no orders section found, use positions_end as end
+        if orders_end is None:
+            orders_end = len(rows)
+
+        # ── Step 2a: Parse Orders section for initial SL per ticket ──
+        initial_sl_by_ticket: dict[str, float] = {}
+        if orders_start and orders_end and orders_header_row is not None:
+            ord_header_raw = rows[orders_header_row]
+            ord_header = [_cell_to_str(h) for h in ord_header_raw]
+            ord_col_map = _map_columns(ord_header)
+            ord_data_rows = rows[orders_start:orders_end]
+
+            # Find the ticket/ordre and SL columns in Orders
+            ticket_idx = ord_col_map.get("ticket")
+            sl_idx = ord_col_map.get("sl_price")
+
+            if ticket_idx is not None and sl_idx is not None:
+                for ord_row in ord_data_rows:
+                    if all(c is None for c in ord_row):
+                        continue
+                    str_ord = [_cell_to_str(c) for c in ord_row]
+                    if ticket_idx < len(str_ord) and sl_idx < len(str_ord):
+                        ticket_val = str_ord[ticket_idx].strip()
+                        sl_val = _safe_float(str_ord[sl_idx])
+                        if ticket_val and sl_val > 0:
+                            # Keep the first (opening) order's SL as initial SL
+                            if ticket_val not in initial_sl_by_ticket:
+                                initial_sl_by_ticket[ticket_val] = sl_val
+
+            logger.info(
+                f"XLSX sheet '{sheet_name}': Orders section parsed, "
+                f"{len(initial_sl_by_ticket)} initial SL values found"
+            )
+
+        # ── Step 2b: Slice to Positions block ──
         if positions_start and positions_end and positions_header_row is not None:
             header_row_raw = rows[positions_header_row]
             header_row = [_cell_to_str(h) for h in header_row_raw]
@@ -448,6 +487,10 @@ def _parse_xlsx_content(content_bytes: bytes, tz_code: str = "UTC", session_conf
             setup = get("setup")
             notes = get("notes")
             ticket = get("ticket")
+
+            # Use initial SL from Orders section if available
+            if ticket and ticket in initial_sl_by_ticket:
+                sl_price = initial_sl_by_ticket[ticket]
 
             # Auto-detect session from open_time using timezone + user session config
             if not session and open_time:
@@ -671,10 +714,12 @@ async def confirm_import(
             if r_multiple is None and profit != 0:
                 sl_price = _safe_float(t.get("sl_price", 0))
                 entry_price = _safe_float(t.get("entry_price", 0))
-                if sl_price > 0 and entry_price > 0:
-                    risk = abs(entry_price - sl_price)
-                    if risk > 0:
-                        r_multiple = profit / risk
+                trade_volume = _safe_float(t.get("volume", 0))
+                if sl_price > 0 and entry_price > 0 and trade_volume > 0:
+                    risk_in_price = abs(entry_price - sl_price)
+                    risk_in_dollars = risk_in_price * trade_volume
+                    if risk_in_dollars > 0:
+                        r_multiple = profit / risk_in_dollars
 
             trade = Trade(
                 account_id=account_id,
