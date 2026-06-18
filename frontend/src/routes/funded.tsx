@@ -264,13 +264,13 @@ export function FundedPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
               <span className="text-muted">Drawdown max</span>
               <span className="text-red" style={{ fontWeight: 700 }}>
-                {selected.max_drawdown_pct.toFixed(1)}% / {selected.drawdown_limit_pct}%
+                {(summary?.max_drawdown_pct ?? 0).toFixed(1)}% / {(summary?.drawdown_limit_pct ?? 7)}%
               </span>
             </div>
             <div className="progress-bar">
               <div
                 className="progress-fill red"
-                style={{ width: `${Math.min((selected.max_drawdown_pct / selected.drawdown_limit_pct) * 100, 100)}%` }}
+                style={{ width: `${Math.min(((summary?.max_drawdown_pct ?? 0) / (summary?.drawdown_limit_pct ?? 7)) * 100, 100)}%` }}
               />
             </div>
           </div>

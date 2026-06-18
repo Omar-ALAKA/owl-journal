@@ -9,7 +9,7 @@ import {
 import { useThemeStore } from '@/stores/theme';
 import { useTimezoneStore, getTimezoneOffset, getEffectiveTzName, getCurrentSession, formatOffset } from '@/stores/timezone';
 import { useQuery } from '@tanstack/react-query';
-import { fetchDrawdownAnalysis } from '@/lib/api';
+import { fetchFundedAccounts } from '@/lib/api';
 import { useState, useEffect } from 'react';
 
 const navItems = [
@@ -55,7 +55,14 @@ export function Sidebar() {
   const timeStr = localTime.toISOString().slice(11, 16);
 
   const { data: dd } = useQuery({
-    queryKey: ['sb-dd'], queryFn: () => fetchDrawdownAnalysis().catch(() => null),
+    queryKey: ['sb-dd'], queryFn: () => fetchFundedAccounts().then(d => {
+      const acct = d.accounts?.[0];
+      if (!acct) return null;
+      return {
+        current_drawdown_pct: acct.current_drawdown_pct ?? 0,
+        max_drawdown_pct: acct.max_drawdown_pct ?? 0,
+      };
+    }).catch(() => null),
     refetchInterval: 30000, staleTime: 20000,
   });
 
